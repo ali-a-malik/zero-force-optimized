@@ -45,6 +45,8 @@ const state = {
   analysis: null,
   replay: null,
   revealWeek: Infinity,
+  resultsTab: 'scenario',
+  replayTimer: null,
   busy: false,
 };
 
@@ -146,6 +148,13 @@ let lastAnimatedStep = null;
 
 function renderPanel() {
   const panel = el('panel');
+  // A replay animation belongs to the panel that started it; tearing that panel
+  // down has to stop the timer or it keeps redrawing a map nobody is watching.
+  if (state.replayTimer) {
+    clearInterval(state.replayTimer);
+    state.replayTimer = null;
+    state.revealWeek = Infinity;
+  }
   panel.innerHTML = '';
   const draw = {
     business: stepBusiness,
@@ -539,6 +548,7 @@ function stepResults() {
     },
     onRerender: render,
     onBack: () => goto('places'),
+    applyModelChange: applyModelChange,
     runAnalysis,
     requestReplay,
     requestWeakest,
@@ -593,6 +603,14 @@ async function requestThrottle() {
 
 async function requestWhatIf(edits) {
   return state.backend.call('whatIf', { scenario: scenarioIndices(), edits });
+}
+
+/** Commit a what-if edit that the user liked into the real model. */
+async function applyModelChange() {
+  await pushModel();
+  state.resultsTab = 'scenario';
+  render();
+  await runAnalysis();
 }
 
 async function requestReplay() {

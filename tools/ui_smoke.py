@@ -188,6 +188,59 @@ def main():
 
         page.screenshot(path="/tmp/cascade-results.png", full_page=True)
 
+        check(
+            "the probability curve is drawn",
+            page.locator(".chart .curve-line").count() == 1,
+        )
+        check(
+            "the chart has a text alternative and a table view",
+            bool(page.get_attribute(".chart svg", "aria-label")) and page.locator(".odds").count() == 1,
+        )
+
+        print("\n── weakest links ─────────────────────────────────────────")
+        page.click('button[role="tab"]:has-text("Weakest links")')
+        page.wait_for_selector(".link-list li", timeout=30000)
+        items = page.locator(".link-list li").count()
+        check("single failures are ranked", items >= 2, f"{items} ranked")
+        values = page.locator(".link-value").all_inner_texts()
+        nums = [float(v.split()[0]) for v in values if v and v[0].isdigit()]
+        check("sorted soonest first", nums == sorted(nums), str(nums[:4]))
+        check(
+            "each one is a plain sentence",
+            "goes down on its own, it reaches" in page.inner_text(".link-list"),
+        )
+
+        print("\n── fix it ────────────────────────────────────────────────")
+        page.click('button[role="tab"]:has-text("Fix it")')
+        page.wait_for_selector(".fix-row")
+        before_text = page.inner_text(".result-figure") if page.locator(".result-figure").count() else ""
+        page.locator('.fix-row button:has-text("Add a backup")').first.click()
+        page.wait_for_selector(".whatif", timeout=30000)
+        after = page.inner_text(".whatif-after")
+        before = page.inner_text(".whatif-before")
+        check("what-if shows before and after", bool(before.strip()) and bool(after.strip()), f"{before} -> {after}")
+        check("what-if says what it buys you in plain terms", "that " in page.inner_text(".whatif"))
+
+        nodes_before = page.locator("#map [data-node]").count()
+        page.click('button:has-text("Apply this change")')
+        page.wait_for_timeout(1200)
+        nodes_after = page.locator("#map [data-node]").count()
+        check("applying the fix changes the real model", nodes_after == nodes_before + 1,
+              f"{nodes_before} -> {nodes_after} companies")
+
+        print("\n── replay ────────────────────────────────────────────────")
+        page.click('button[role="tab"]:has-text("Replay")')
+        page.wait_for_selector(".replay-log li", timeout=30000)
+        log_items = page.locator(".replay-log li").count()
+        check("the cascade is logged week by week", log_items >= 2, f"{log_items} entries")
+        page.wait_for_timeout(1600)
+        week = page.inner_text(".replay-week")
+        check("the map animates forward", "week" in week.lower(), week)
+        page.click('button:has-text("Run another")')
+        page.wait_for_timeout(900)
+        check("run another works", page.locator(".replay-log li").count() >= 2)
+        page.screenshot(path="/tmp/cascade-replay.png", full_page=True)
+
         print("\n── persistence ───────────────────────────────────────────")
         page.reload()
         page.wait_for_selector("#shell:not([hidden])", timeout=30000)

@@ -40,12 +40,15 @@
   --paper-sunk: #e7e2d4;
   --ink: #17150f;
   --ink-soft: #5b5547;
-  --ink-faint: #8d8676;
+  /* Text tones are held at >= 4.5:1 on --paper-raised; --rule-strong is a
+     stroke colour only, where the 3:1 mark threshold applies. Measured, not
+     eyeballed — see tools/check_contrast.mjs. */
+  --ink-faint: #787160;
   --rule: #d2cbb8;
   --rule-strong: #8d8676;
   --signal: #bf3a20;
   --signal-wash: #f6e4dd;
-  --amber: #b8791a;
+  --amber: #9c6512;
   --safe: #2f6048;
 
   --serif: 'Newsreader', Georgia, 'Times New Roman', serif;
@@ -322,7 +325,9 @@ input[type='text'], select {
   font-size: 0.92rem;
   color: var(--ink);
   background: var(--paper-raised);
-  border: 1px solid var(--rule);
+  /* --rule-strong, not --rule: a control's boundary is interface information
+     and owes 3:1, where a divider between two blocks does not. */
+  border: 1px solid var(--rule-strong);
   border-radius: 2px;
   padding: 0.42rem 0.55rem;
   width: 100%;
@@ -748,3 +753,197 @@ input[type='text']::placeholder { color: var(--ink-faint); }
 }
 
 .odds tbody th { text-align: left; color: var(--ink-faint); font-weight: 400; }
+
+/* ── results tabs ───────────────────────────────────────────────────────── */
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--ink);
+  margin: 1.4rem 0 0;
+}
+
+.tabs button {
+  appearance: none;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  background: none;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  color: var(--ink-soft);
+  padding: 0.4rem 0.85rem;
+  margin-bottom: -1px;
+  border-radius: 2px 2px 0 0;
+}
+
+.tabs button:hover:not(:disabled) { color: var(--ink); background: var(--paper-sunk); }
+.tabs button[aria-selected='true'] {
+  background: var(--paper-raised);
+  border-color: var(--ink);
+  color: var(--ink);
+  font-weight: 500;
+}
+.tabs button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.tab-body { padding-top: 1.2rem; }
+.tab-body .result { border-top: 0; padding-top: 0; }
+
+/* ── curve chart ────────────────────────────────────────────────────────── */
+
+.chart { margin: 0 0 1.2rem; }
+
+.chart figcaption {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 0.45rem;
+}
+
+.chart-plot { position: relative; border: 1px solid var(--rule); background: var(--paper-raised); }
+.chart-plot svg { display: block; width: 100%; height: auto; touch-action: none; }
+
+.chart .grid line { stroke: var(--rule); stroke-width: 1; }
+.chart .axis { font-family: var(--mono); font-size: 9px; fill: var(--ink-faint); }
+
+.chart .curve-area { fill: var(--signal); fill-opacity: 0.1; stroke: none; }
+.chart .curve-line {
+  fill: none;
+  stroke: var(--signal);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chart .marker line { stroke: var(--signal); stroke-width: 1; stroke-dasharray: 2 3; }
+.chart .marker circle { fill: var(--signal); stroke: var(--paper-raised); stroke-width: 2; }
+.chart .marker .axis { fill: var(--signal); }
+
+.chart .end-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  fill: var(--signal);
+}
+
+.chart .crosshair { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 2 2; }
+.chart .crosshair-dot { fill: var(--ink); stroke: var(--paper-raised); stroke-width: 2; }
+
+.chart-tip {
+  position: absolute;
+  transform: translate(-50%, -160%);
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 2px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.chart-tip b { color: #fff; }
+
+/* ── weakest links ──────────────────────────────────────────────────────── */
+
+.link-list { list-style: none; margin: 0 0 1rem; padding: 0; border-top: 1px solid var(--rule); }
+
+.link-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(90px, 1fr) auto;
+  gap: 0.2rem 0.8rem;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.link-name { font-weight: 500; font-size: 0.92rem; }
+
+.link-bar { display: block; height: 10px; background: var(--paper-sunk); border-radius: 2px; }
+.link-bar i {
+  display: block;
+  height: 100%;
+  background: var(--signal);
+  border-radius: 0 2px 2px 0;
+}
+
+.link-value {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.link-sentence {
+  grid-column: 1 / -1;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+/* ── fix it ─────────────────────────────────────────────────────────────── */
+
+.fix-list { border-top: 1px solid var(--rule); margin-bottom: 1.2rem; }
+
+.fix-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.fix-dep { flex: 1 1 240px; font-size: 0.88rem; }
+.fix-dep .mono {
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.fix-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+.whatif { border: 1px solid var(--ink); background: var(--paper-raised); padding: 0.9rem 1rem 1rem; }
+
+.whatif-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  font-family: var(--serif);
+  font-variation-settings: 'opsz' 40;
+  font-size: clamp(1.3rem, 3vw, 1.9rem);
+  margin: 0.2rem 0 0.5rem;
+}
+
+.whatif-before { color: var(--ink-faint); text-decoration: line-through; }
+.whatif-arrow { color: var(--ink-faint); font-family: var(--mono); font-size: 1rem; }
+.whatif-after.is-better { color: var(--safe); }
+.whatif-after.is-worse { color: var(--signal); }
+
+/* ── replay ─────────────────────────────────────────────────────────────── */
+
+.replay-bar { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.9rem; }
+.replay-week { font-size: 0.74rem; color: var(--ink-faint); letter-spacing: 0.08em; text-transform: uppercase; }
+
+.replay-log { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+
+.replay-log li {
+  display: flex;
+  gap: 0.7rem;
+  align-items: baseline;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.88rem;
+}
+
+.replay-log li .mono {
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  min-width: 5.5rem;
+}
+
+.replay-log li.is-safe { color: var(--safe); }

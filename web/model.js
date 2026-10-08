@@ -231,12 +231,14 @@ export function reviveModel(raw) {
 // ── templates ───────────────────────────────────────────────────────────────
 
 export async function loadTemplates(base = './templates/') {
-  const manifest = await (await fetch(`${base}manifest.json`)).json();
-  const templates = [];
-  for (const id of manifest.templates) {
-    templates.push(await (await fetch(`${base}${id}.json`)).json());
-  }
-  const suggestions = await (await fetch(`${base}suggestions.json`)).json();
+  const grab = async (name) => (await fetch(`${base}${name}.json`)).json();
+  const manifest = await grab('manifest');
+  // In parallel, not in sequence: these are eight small files, so serialising
+  // them costs eight round trips, which on a slow link is most of the load.
+  const [templates, suggestions] = await Promise.all([
+    Promise.all(manifest.templates.map(grab)),
+    grab('suggestions'),
+  ]);
   return { templates, suggestions };
 }
 

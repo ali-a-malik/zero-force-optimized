@@ -1,0 +1,20 @@
+{
+  "id": "handmade-shop",
+  "label": "Etsy / handmade shop",
+  "blurb": "Materials, packaging and postage — small chain, few alternatives.",
+  "nodes": [
+    { "name": "My handmade shop", "supplies": "handmade goods", "region": "" },
+    { "name": "Craft materials supplier", "supplies": "yarn, beads, clay", "region": "" },
+    { "name": "Packaging supplier", "supplies": "boxes and mailers", "region": "" },
+    { "name": "Postal carrier", "supplies": "shipping", "region": "" },
+    { "name": "Yarn mill", "supplies": "spun yarn", "region": "overseas" },
+    { "name": "Paper mill", "supplies": "card and paper", "region": "" }
+  ],
+  "links": [
+    { "from": 1, "to": 0, "reliance": 4 },
+    { "from": 2, "to": 0, "reliance": 2 },
+    { "from": 3, "to": 0, "reliance": 4 },
+    { "from": 4, "to": 1, "reliance": 8 },
+    { "from": 5, "to": 2, "reliance": 8 }
+  ]
+}

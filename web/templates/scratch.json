@@ -1,0 +1,9 @@
+{
+  "id": "scratch",
+  "label": "Start from scratch",
+  "blurb": "Just you. Add your own suppliers one at a time.",
+  "nodes": [
+    { "name": "My business", "supplies": "", "region": "" }
+  ],
+  "links": []
+}

@@ -1,0 +1,10 @@
+{
+  "templates": [
+    "coffee-shop",
+    "restaurant",
+    "clothing-brand",
+    "electronics-maker",
+    "handmade-shop",
+    "scratch"
+  ]
+}

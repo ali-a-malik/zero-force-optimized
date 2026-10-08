@@ -1,0 +1,24 @@
+{
+  "id": "electronics-maker",
+  "label": "Electronics maker",
+  "blurb": "A contract assembler, the chip distributor it depends on, and the board fab.",
+  "nodes": [
+    { "name": "My hardware company", "supplies": "finished devices", "region": "" },
+    { "name": "Contract assembler", "supplies": "assembled boards", "region": "overseas" },
+    { "name": "Enclosure supplier", "supplies": "plastic and metal cases", "region": "" },
+    { "name": "Chip distributor", "supplies": "microcontrollers", "region": "" },
+    { "name": "Passive components supplier", "supplies": "resistors, capacitors", "region": "overseas" },
+    { "name": "PCB fab", "supplies": "bare circuit boards", "region": "overseas" },
+    { "name": "Laminate supplier", "supplies": "board substrate", "region": "overseas" },
+    { "name": "Air freight", "supplies": "shipping", "region": "" }
+  ],
+  "links": [
+    { "from": 1, "to": 0, "reliance": 8 },
+    { "from": 2, "to": 0, "reliance": 2 },
+    { "from": 7, "to": 0, "reliance": 2 },
+    { "from": 3, "to": 1, "reliance": 8 },
+    { "from": 4, "to": 1, "reliance": 4 },
+    { "from": 5, "to": 1, "reliance": 4 },
+    { "from": 6, "to": 5, "reliance": 8 }
+  ]
+}

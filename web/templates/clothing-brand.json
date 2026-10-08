@@ -1,0 +1,25 @@
+{
+  "id": "clothing-brand",
+  "label": "Clothing brand",
+  "blurb": "One cut-and-sew factory, the mill that feeds it, and the fibre behind that.",
+  "nodes": [
+    { "name": "My clothing brand", "supplies": "finished garments", "region": "" },
+    { "name": "Cut-and-sew factory", "supplies": "sewn garments", "region": "overseas" },
+    { "name": "Trims supplier", "supplies": "zips, buttons, labels", "region": "" },
+    { "name": "Fabric mill", "supplies": "woven fabric", "region": "overseas" },
+    { "name": "Yarn spinner", "supplies": "spun yarn", "region": "overseas" },
+    { "name": "Dye house", "supplies": "dyeing", "region": "overseas" },
+    { "name": "Cotton farms", "supplies": "raw cotton", "region": "overseas" },
+    { "name": "Ocean freight", "supplies": "shipping", "region": "" }
+  ],
+  "links": [
+    { "from": 1, "to": 0, "reliance": 8 },
+    { "from": 2, "to": 0, "reliance": 2 },
+    { "from": 7, "to": 0, "reliance": 4 },
+    { "from": 3, "to": 1, "reliance": 8 },
+    { "from": 2, "to": 1, "reliance": 2 },
+    { "from": 4, "to": 3, "reliance": 8 },
+    { "from": 5, "to": 3, "reliance": 4 },
+    { "from": 6, "to": 4, "reliance": 8 }
+  ]
+}

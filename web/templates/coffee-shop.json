@@ -1,0 +1,23 @@
+{
+  "id": "coffee-shop",
+  "label": "Coffee shop",
+  "blurb": "Beans, milk and cups — and the roaster, dairy and importer behind them.",
+  "nodes": [
+    { "name": "My coffee shop", "supplies": "coffee and food", "region": "" },
+    { "name": "Coffee roaster", "supplies": "roasted beans", "region": "" },
+    { "name": "Dairy distributor", "supplies": "milk and cream", "region": "" },
+    { "name": "Packaging supplier", "supplies": "cups and lids", "region": "" },
+    { "name": "Green coffee importer", "supplies": "unroasted beans", "region": "overseas" },
+    { "name": "Local dairy farm", "supplies": "raw milk", "region": "nearby" },
+    { "name": "Delivery company", "supplies": "trucking", "region": "" }
+  ],
+  "links": [
+    { "from": 1, "to": 0, "reliance": 8 },
+    { "from": 2, "to": 0, "reliance": 4 },
+    { "from": 3, "to": 0, "reliance": 2 },
+    { "from": 4, "to": 1, "reliance": 8 },
+    { "from": 6, "to": 1, "reliance": 2 },
+    { "from": 5, "to": 2, "reliance": 8 },
+    { "from": 6, "to": 2, "reliance": 2 }
+  ]
+}

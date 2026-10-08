@@ -24,6 +24,55 @@
   <div class="bar"><span></span></div>
 </div>
 
+<script>
+// A classic script, deliberately not a module. This is the only JavaScript on
+// the page that runs when index.html is opened straight off the filesystem:
+// browsers refuse to load ES modules from a file:// origin (it is opaque, so
+// the module fetch fails CORS), which means app.js never executes and nothing
+// inside it can report the problem. Hence this guard.
+(function () {
+  function fail(title, bodyHtml) {
+    var meta = document.getElementById('engine-meta');
+    if (meta) meta.textContent = 'not started';
+    var boot = document.getElementById('boot');
+    var box = document.createElement('div');
+    box.className = 'fatal';
+    box.innerHTML = '<h2></h2>' + bodyHtml;
+    box.querySelector('h2').textContent = title;
+    boot.parentNode.replaceChild(box, boot);
+  }
+
+  if (location.protocol === 'file:') {
+    // Show the actual command for this actual folder, so it can be pasted.
+    var dir = decodeURIComponent(location.pathname).replace(/\/[^/]*$/, '');
+    var cmd = document.createElement('code');
+    cmd.textContent = 'cd ' + dir + ' && python3 -m http.server 8000';
+    fail(
+      'This page has to be served, not opened directly',
+      '<p>Browsers block JavaScript modules, fonts and WebAssembly on ' +
+        '<code>file://</code> pages, so nothing here can start. It needs any ' +
+        'local web server — it still makes no network requests once loaded, and ' +
+        'your data still never leaves the browser.</p>' +
+        '<p>In a terminal:</p><p id="cmd"></p>' +
+        '<p>then open <code>http://localhost:8000/</code></p>',
+    );
+    document.getElementById('cmd').appendChild(cmd);
+    return;
+  }
+
+  // Served properly but still stuck: say so instead of spinning forever.
+  setTimeout(function () {
+    if (window.__cascadeBooted) return;
+    fail(
+      'The app did not finish starting',
+      '<p>The page loaded but the solver never reported in. The browser console ' +
+        'will say why — most often a file next to index.html is missing, or ' +
+        '<code>rzf_engine.wasm</code> was not built.</p>',
+    );
+  }, 15000);
+})();
+</script>
+
 <noscript>
   <div class="fatal">
     <h2>This tool needs JavaScript</h2>

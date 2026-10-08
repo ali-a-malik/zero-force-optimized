@@ -77,6 +77,8 @@ async function boot() {
   state.model = M.loadDraft() ?? M.modelFromTemplate(byId('scratch'));
   if (M.loadDraft()) state.step = 'suppliers';
 
+  // Tells the guard in index.html that the module really did run.
+  window.__cascadeBooted = true;
   el('boot').hidden = true;
   el('shell').hidden = false;
   attachMapHandlers(el('map'), { onNodeActivate: onMapNode });
@@ -86,6 +88,7 @@ async function boot() {
 }
 
 function fatal(title, detail) {
+  window.__cascadeBooted = true;
   el('boot').hidden = true;
   const box = h(`<div class="fatal"><h2>${esc(title)}</h2><p>${esc(detail)}</p></div>`);
   document.body.insertBefore(box, el('shell'));

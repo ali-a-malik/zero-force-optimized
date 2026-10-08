@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <limits>
+#include <memory>
 #include <vector>
 
 namespace rzf {
@@ -117,6 +118,11 @@ struct ExactOptions {
   uint64_t maxStates = 1ull << 26;
   // Auto = Layered when built with OpenMP, Sequential otherwise.
   SolveOrder order = SolveOrder::Auto;
+  // Optional progress hook, called every ~65k states with (done, total). The
+  // browser worker uses it to drive a progress bar; cancelling is the host's
+  // job (terminate the worker), since a single-threaded worker cannot receive
+  // a message while the solve is running.
+  void (*progress)(uint64_t done, uint64_t total) = nullptr;
 };
 
 // True if this build can actually run layers in parallel.
@@ -124,13 +130,34 @@ bool openMpEnabled();
 
 // E[S] for every one of the 2^n states. E[0] = ∞ (empty start set, matching the
 // research convention). Unreachable configurations are ∞ and never finite.
-struct ExactTable {
+//
+// The table owns a plain nothrow-allocated buffer rather than a std::vector, so
+// running out of memory is a return value instead of an exception. The browser
+// build compiles with exceptions off, and the whole point of §4.1's
+// "freestanding-friendly" is that this allocation is the only one that can
+// realistically fail.
+class ExactTable {
+ public:
+  ExactTable() = default;
+  ExactTable(const ExactTable&) = delete;
+  ExactTable& operator=(const ExactTable&) = delete;
+
   int n = 0;
   int target = -1;
-  std::vector<double> E;
 
-  double at(uint64_t S) const { return E[static_cast<size_t>(S)]; }
-  bool empty() const { return E.empty(); }
+  double at(uint64_t S) const { return e_[static_cast<size_t>(S)]; }
+  bool empty() const { return count_ == 0; }
+  size_t size() const { return count_; }
+  const double* data() const { return e_.get(); }
+  double* mutableData() { return e_.get(); }
+
+  // Allocates `count` doubles set to `fill`. False if the allocation failed.
+  bool allocate(size_t count, double fill);
+  void reset();
+
+ private:
+  std::unique_ptr<double[]> e_;
+  size_t count_ = 0;
 };
 
 // One backward pass over states from 2^n−2 down to 1. Successors are always

@@ -315,14 +315,14 @@ void checkVisitOrders() {
     const bool okb = rzf::solveExact(g, b, tb) == rzf::Status::Ok;
     size_t diff = 0;
     if (oka && okb) {
-      for (size_t i = 0; i < ta.E.size(); ++i) {
-        if (!(ta.E[i] == tb.E[i])) ++diff;   // ∞ == ∞ is true; NaN would not be
+      for (size_t i = 0; i < ta.size(); ++i) {
+        if (!(ta.at(i) == tb.at(i))) ++diff;   // ∞ == ∞ is true; NaN would not be
       }
     }
     report(std::string("layered == sequential · ") + c.spec +
                (c.target < 0 ? " (ept)" : " (hit " + std::to_string(c.target) + ")"),
            oka && okb && diff == 0,
-           oka && okb ? std::to_string(diff) + " of " + std::to_string(ta.E.size()) +
+           oka && okb ? std::to_string(diff) + " of " + std::to_string(ta.size()) +
                             " states differ"
                       : "solver failed");
   }

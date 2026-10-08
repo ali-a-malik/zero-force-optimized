@@ -14,7 +14,12 @@ ARCH     := $(shell $(CXX) -march=native -E -x c++ /dev/null >/dev/null 2>&1 && 
 ifeq ($(OMP),1)
 OMPFLAGS := -fopenmp
 endif
-CXXFLAGS += $(CXXSTD) $(OPT) $(WARN) $(ARCH) $(OMPFLAGS)
+# -ffp-contract=off: no fused multiply-add. WebAssembly has no FMA instruction,
+# so disabling fusion here is what makes the native and .wasm builds agree bit
+# for bit (§6 item 7). It also keeps native results identical across -march
+# settings, which matters for reproducing published numbers.
+FPFLAGS  := -ffp-contract=off
+CXXFLAGS += $(CXXSTD) $(OPT) $(WARN) $(ARCH) $(FPFLAGS) $(OMPFLAGS)
 LDFLAGS  += $(OMPFLAGS)
 
 BUILD    := build
@@ -23,10 +28,15 @@ ENGINE   := engine
 SRCS     := $(wildcard $(ENGINE)/rzf_*.cpp)
 OBJS     := $(patsubst $(ENGINE)/%.cpp,$(BUILD)/%.o,$(SRCS))
 
-BINS     := $(BUILD)/rzf_cli $(BUILD)/rzf_verify
+BINS     := $(BUILD)/rzf_cli $(BUILD)/rzf_verify $(BUILD)/rzf_parity
 
-.PHONY: all verify bench clean wasm
+.PHONY: all test verify bench clean wasm parity jstest
 all: $(BINS)
+
+# Everything that has to pass before any UI work ships (§6).
+test: verify wasm parity jstest
+	@echo
+	@echo "all suites passed"
 
 $(BUILD):
 	@mkdir -p $(BUILD)
@@ -39,6 +49,19 @@ $(BUILD)/rzf_cli: $(ENGINE)/cli.cpp $(OBJS) | $(BUILD)
 
 $(BUILD)/rzf_verify: $(ENGINE)/tests/verify.cpp $(OBJS) | $(BUILD)
 	$(CXX) $(CXXFLAGS) $< $(OBJS) $(LDFLAGS) -o $@
+
+$(BUILD)/rzf_parity: $(ENGINE)/tests/parity_dump.cpp $(OBJS) | $(BUILD)
+	$(CXX) $(CXXFLAGS) $< $(OBJS) $(LDFLAGS) -o $@
+
+# §6 item 7: the native battery, recomputed through the .wasm, compared bit
+# for bit. Needs `make wasm` first.
+parity: $(BUILD)/rzf_parity web/rzf_engine.wasm
+	./$(BUILD)/rzf_parity > $(BUILD)/parity.txt
+	node web/tests/parity.mjs $(BUILD)/parity.txt
+
+# The JS layer the app talks to.
+jstest: web/rzf_engine.wasm
+	node web/tests/analysis.test.mjs
 
 # Run from the repo root so --data throttling resolves.
 verify: $(BUILD)/rzf_verify

@@ -1,6 +1,7 @@
 #include "rzf_core.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <new>
 
 namespace rzf {
@@ -146,6 +147,21 @@ bool Graph::isUnweightedBidirPath() const {
 
 // ─── Exact solver ────────────────────────────────────────────────────────────
 
+bool ExactTable::allocate(size_t count, double fill) {
+  reset();
+  if (count == 0) return false;
+  e_.reset(new (std::nothrow) double[count]);
+  if (!e_) return false;
+  count_ = count;
+  std::fill(e_.get(), e_.get() + count, fill);
+  return true;
+}
+
+void ExactTable::reset() {
+  e_.reset();
+  count_ = 0;
+}
+
 uint64_t estimateStates(int n) {
   if (n <= 0 || n >= kMaxVertices) return 0;
   return 1ull << n;
@@ -272,10 +288,12 @@ struct DpContext {
 
 // Popcount layers, descending. Each layer is materialised in bounded chunks so
 // OpenMP has an indexable range to split without ever holding all C(n,k) masks.
-void runLayered(const DpContext& ctx, int n, uint64_t size) {
+void runLayered(const DpContext& ctx, int n, uint64_t size,
+                void (*progress)(uint64_t, uint64_t)) {
   constexpr size_t kChunk = 1u << 14;
   std::vector<uint64_t> chunk;
   chunk.reserve(kChunk);
+  uint64_t done = 0;
   for (int k = n - 1; k >= 1; --k) {
     uint64_t mask = (1ull << k) - 1;
     while (mask < size) {
@@ -290,6 +308,8 @@ void runLayered(const DpContext& ctx, int n, uint64_t size) {
 #pragma omp parallel for schedule(static)
 #endif
       for (long long idx = 0; idx < count; ++idx) ctx.solveState(masks[idx]);
+      done += static_cast<uint64_t>(count);
+      if (progress) progress(done, size);
     }
   }
 }
@@ -306,16 +326,11 @@ Status solveExact(const Graph& g, const ExactOptions& opt, ExactTable& out) {
 
   out.n = n;
   out.target = opt.target;
-  try {
-    out.E.assign(static_cast<size_t>(size), kInf);
-  } catch (const std::bad_alloc&) {
-    out.E.clear();
-    return Status::OutOfMemory;
-  }
+  if (!out.allocate(static_cast<size_t>(size), kInf)) return Status::OutOfMemory;
 
   DpContext ctx;
   ctx.g = &g;
-  ctx.E = out.E.data();
+  ctx.E = out.mutableData();
   ctx.full = g.fullMask();
   ctx.target = opt.target;
   ctx.inMask.resize(n);
@@ -340,10 +355,15 @@ Status solveExact(const Graph& g, const ExactOptions& opt, ExactTable& out) {
   }
 
   if (order == SolveOrder::Layered) {
-    runLayered(ctx, n, size);
+    runLayered(ctx, n, size, opt.progress);
   } else {
-    for (uint64_t i = size - 2; i >= 1; --i) ctx.solveState(i);
+    constexpr uint64_t kTick = 1ull << 16;
+    for (uint64_t i = size - 2; i >= 1; --i) {
+      ctx.solveState(i);
+      if (opt.progress && (i & (kTick - 1)) == 0) opt.progress(size - i, size);
+    }
   }
+  if (opt.progress) opt.progress(size, size);
 
   return Status::Ok;
 }

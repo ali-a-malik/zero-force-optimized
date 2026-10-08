@@ -1,0 +1,2421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RZF Throttling Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anybody:wght@500;700;800&family=Kode+Mono:wght@400;500;600;700&family=Sora:wght@200;300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   RZF THROTTLING EXPLORER — instrument console
+   A scientific-instrument aesthetic: near-black navy chassis, hairline
+   luminous rules, cyan→violet reserved strictly for *energised* states
+   (active family, primary action, infected vertices, live edges). Everything
+   else stays monochrome blue-grey so the accent always means something.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* chassis */
+  --void:      #060A12;
+  --panel:     #0C1422;
+  --panel-hi:  #111C2E;
+  --inset:     #080E19;
+
+  /* rules */
+  --line:      rgba(148,183,214,0.10);
+  --line-2:    rgba(148,183,214,0.19);
+  --line-3:    rgba(148,183,214,0.30);
+
+  /* signal */
+  --cyan:      #22D3EE;
+  --violet:    #8B5CF6;
+  --mint:      #34D399;
+  --amber:     #FBBF24;
+  --rose:      #FB7185;
+
+  --cyan-dim:   rgba(34,211,238,0.12);
+  --violet-dim: rgba(139,92,246,0.12);
+  --mint-dim:   rgba(52,211,153,0.10);
+  --amber-dim:  rgba(251,191,36,0.10);
+  --rose-dim:   rgba(251,113,133,0.10);
+
+  --grad:      linear-gradient(118deg, #22D3EE 0%, #4BB8F0 42%, #8B5CF6 100%);
+  --grad-soft: linear-gradient(118deg, rgba(34,211,238,0.16), rgba(139,92,246,0.16));
+
+  /* type */
+  --ink:       #E4EEF9;
+  --dim:       #8FA6BF;
+  --dimmer:    #56697F;
+
+  --display: 'Anybody', 'Archivo', 'Helvetica Neue', sans-serif;
+  --body:    'Sora', 'Helvetica Neue', Arial, sans-serif;
+  --mono:    'Kode Mono', 'SFMono-Regular', Menlo, monospace;
+
+  --r:    14px;
+  --r-sm: 9px;
+
+  --shadow: 0 24px 48px -30px rgba(0,0,0,0.95), 0 1px 0 rgba(255,255,255,0.025) inset;
+  --glow-cyan:   0 0 22px rgba(34,211,238,0.28);
+  --glow-violet: 0 0 22px rgba(139,92,246,0.24);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--void);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 14.5px;
+  font-weight: 300;
+  line-height: 1.62;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* ── Atmosphere: glow field + blueprint grid + grain ────────────────────── */
+.atmos {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.atmos::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(720px 460px at 12% -6%,  rgba(34,211,238,0.13), transparent 62%),
+    radial-gradient(760px 520px at 92% 4%,   rgba(139,92,246,0.12), transparent 60%),
+    radial-gradient(900px 640px at 50% 112%, rgba(34,211,238,0.06), transparent 66%);
+}
+.atmos::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(0deg,  rgba(148,183,214,0.035) 0 1px, transparent 1px 72px),
+    repeating-linear-gradient(90deg, rgba(148,183,214,0.035) 0 1px, transparent 1px 72px);
+  mask-image: radial-gradient(circle at 50% 22%, #000 0%, transparent 78%);
+  -webkit-mask-image: radial-gradient(circle at 50% 22%, #000 0%, transparent 78%);
+}
+.grain {
+  position: fixed;
+  inset: -50%;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.055;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ── Fixed instrument rail ──────────────────────────────────────────────── */
+.rail {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(6,10,18,0.82);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-bottom: 1px solid var(--line);
+}
+.rail::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(34,211,238,0.42), rgba(139,92,246,0.42), transparent);
+}
+.rail-in {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 26px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.mark { display: flex; align-items: center; gap: 10px; }
+.mark svg { display: block; }
+.mark-txt {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+}
+.mark-txt i {
+  font-style: normal;
+  color: var(--dimmer);
+  margin: 0 2px;
+}
+.mark-txt b {
+  font-weight: 800;
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.rail-meta { display: flex; align-items: center; gap: 8px; }
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(12,20,34,0.7);
+  white-space: nowrap;
+}
+.chip b { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.chip i { font-style: normal; color: var(--dimmer); letter-spacing: 0.06em; }
+@media (max-width: 780px) { .chip.opt { display: none; } }
+
+/* ── Hero ───────────────────────────────────────────────────────────────── */
+.shell {
+  position: relative;
+  z-index: 2;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 26px 72px;
+}
+.hero { padding: 62px 0 44px; max-width: 780px; }
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.eyebrow::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(34,211,238,0.4), transparent);
+}
+h1.title {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(2.3rem, 5.2vw, 3.65rem);
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+  margin-bottom: 20px;
+}
+h1.title span {
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.lede {
+  color: var(--dim);
+  font-size: 15px;
+  line-height: 1.75;
+  max-width: 660px;
+}
+.lede strong { color: var(--ink); font-weight: 500; }
+.formula {
+  margin-top: 26px;
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink);
+  padding: 13px 20px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line-2);
+  background: linear-gradient(180deg, rgba(17,28,46,0.9), rgba(8,14,25,0.9));
+  box-shadow: var(--shadow);
+  position: relative;
+}
+.formula::before {
+  content: '';
+  position: absolute;
+  left: 14px; right: 14px; top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(34,211,238,0.55), rgba(139,92,246,0.55), transparent);
+}
+.formula em  { font-style: normal; color: var(--cyan); }
+.formula b   { font-weight: 400; color: var(--violet); }
+.formula sub { color: var(--violet); font-size: 0.72em; letter-spacing: 0; }
+
+/* ── Layout grid ────────────────────────────────────────────────────────── */
+.grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.col-l { display: flex; flex-direction: column; gap: 18px; position: sticky; top: 74px; }
+.col-r { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+@media (max-width: 1080px) {
+  .grid { grid-template-columns: 1fr; }
+  .col-l { position: static; }
+}
+
+/* ── Panels ─────────────────────────────────────────────────────────────── */
+.panel {
+  position: relative;
+  background: linear-gradient(180deg, rgba(17,28,46,0.72), rgba(12,20,34,0.92));
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 20px;
+  box-shadow: var(--shadow);
+  animation: rise 0.62s cubic-bezier(0.22,0.72,0.28,1) both;
+}
+.panel::before {
+  content: '';
+  position: absolute;
+  left: 16px; right: 16px; top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(34,211,238,0.4), rgba(139,92,246,0.4), transparent);
+  opacity: 0.75;
+}
+.panel.viewport { padding-bottom: 22px; }
+.col-l .panel:nth-child(1) { animation-delay: 0.02s; }
+.col-l .panel:nth-child(2) { animation-delay: 0.08s; }
+.col-r .panel:nth-child(1) { animation-delay: 0.05s; }
+.col-r .panel:nth-child(2) { animation-delay: 0.11s; }
+.col-r .panel:nth-child(3) { animation-delay: 0.15s; }
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 18px;
+}
+.card-title::before {
+  content: '';
+  width: 2px;
+  height: 13px;
+  border-radius: 2px;
+  background: var(--grad);
+  box-shadow: 0 0 10px rgba(34,211,238,0.5);
+  flex-shrink: 0;
+}
+.card-title .idx {
+  margin-left: auto;
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--dimmer);
+}
+
+/* ── Family selector ────────────────────────────────────────────────────── */
+.fam-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 7px;
+  margin-bottom: 18px;
+}
+.fam-btn {
+  position: relative;
+  text-align: left;
+  padding: 10px 12px;
+  line-height: 1.3;
+  font-size: 12px;
+  font-weight: 400;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: rgba(8,14,25,0.6);
+  color: var(--dim);
+  cursor: pointer;
+  transition: border-color 0.18s, color 0.18s, background 0.18s, transform 0.18s;
+}
+.fam-btn:hover { border-color: var(--line-3); color: var(--ink); background: rgba(17,28,46,0.8); }
+.fam-btn .fam-sub {
+  display: block;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--dimmer);
+  margin-top: 3px;
+  letter-spacing: 0.04em;
+}
+.fam-btn.active {
+  color: var(--ink);
+  border-color: transparent;
+  background:
+    linear-gradient(rgba(12,20,34,0.96), rgba(12,20,34,0.96)) padding-box,
+    var(--grad) border-box;
+  box-shadow: 0 0 0 1px rgba(34,211,238,0.10), var(--glow-cyan);
+}
+.fam-btn.active .fam-sub { color: var(--cyan); opacity: 0.85; }
+
+.fam-params { display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; }
+.param-row { display: flex; align-items: center; gap: 10px; width: 100%; }
+.param-row .slider-label { min-width: 78px; }
+.param-row input[type=range] { min-width: 60px; }
+
+.fam-summary {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--dimmer);
+  letter-spacing: 0.04em;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  margin-bottom: 14px;
+}
+
+/* ── Controls ───────────────────────────────────────────────────────────── */
+.slider-row { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+.slider-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  white-space: nowrap;
+}
+input[type=range] {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, rgba(34,211,238,0.5), rgba(139,92,246,0.35));
+  outline: none;
+  cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 15px; height: 15px;
+  border-radius: 50%;
+  background: #0B1420;
+  border: 1.5px solid var(--cyan);
+  cursor: pointer;
+  box-shadow: 0 0 0 4px rgba(34,211,238,0.12), 0 0 14px rgba(34,211,238,0.45);
+  transition: box-shadow 0.18s, transform 0.18s;
+}
+input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); box-shadow: 0 0 0 6px rgba(34,211,238,0.16), 0 0 20px rgba(34,211,238,0.6); }
+input[type=range]::-moz-range-thumb {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: #0B1420; border: 1.5px solid var(--cyan); cursor: pointer;
+}
+.slider-val {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  min-width: 26px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(8,14,25,0.7);
+}
+.seg button {
+  border: none;
+  border-radius: 0;
+  padding: 5px 12px;
+  font-size: 10px;
+  font-family: var(--mono);
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  background: transparent;
+}
+.seg button:hover { color: var(--ink); background: rgba(148,183,214,0.06); }
+.seg button.on {
+  background: var(--grad);
+  color: #04121A;
+  font-weight: 600;
+  box-shadow: var(--glow-cyan);
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+
+button {
+  font-family: var(--body);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line-2);
+  background: rgba(8,14,25,0.6);
+  color: var(--dim);
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+button:hover { color: var(--ink); border-color: var(--line-3); background: rgba(17,28,46,0.9); }
+button:active { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+button.primary {
+  position: relative;
+  background: var(--grad);
+  border: none;
+  color: #04121A;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  box-shadow: 0 0 0 1px rgba(34,211,238,0.28), 0 8px 22px -10px rgba(34,211,238,0.6);
+}
+button.primary:hover {
+  color: #04121A;
+  filter: brightness(1.1);
+  box-shadow: 0 0 0 1px rgba(34,211,238,0.45), 0 10px 30px -8px rgba(34,211,238,0.75), var(--glow-violet);
+}
+button:disabled { opacity: 0.38; cursor: not-allowed; transform: none; filter: none; }
+
+/* ── Readout tiles ──────────────────────────────────────────────────────── */
+.metrics-grid   { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-bottom: 16px; }
+.metrics-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 16px; }
+@media (max-width: 520px) { .metrics-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.metric {
+  position: relative;
+  background: linear-gradient(180deg, rgba(8,14,25,0.85), rgba(8,14,25,0.55));
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 12px 10px 10px;
+  text-align: center;
+  overflow: hidden;
+}
+.metric::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 20%; right: 20%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line-3), transparent);
+}
+.metric-val {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 25px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 6px;
+}
+.metric-val.good   { color: var(--mint); }
+.metric-val.warn   { color: var(--amber); }
+.metric-val.bad    { color: #A78BFA; }
+.metric-val.accent { color: var(--cyan); }
+.metric-label {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--dimmer);
+}
+
+/* ── Insight callouts ───────────────────────────────────────────────────── */
+.insight {
+  position: relative;
+  padding: 12px 15px 12px 17px;
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  line-height: 1.62;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  background: rgba(8,14,25,0.6);
+  color: var(--dim);
+}
+.insight::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 9px; bottom: 9px;
+  width: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.85;
+}
+.insight strong { font-weight: 600; }
+.insight-odd   { color: #7FE3F5; background: var(--cyan-dim);   border-color: rgba(34,211,238,0.22); }
+.insight-clean { color: #7BE6BE; background: var(--mint-dim);   border-color: rgba(52,211,153,0.22); }
+.insight-break { color: #B9A2F8; background: var(--violet-dim); border-color: rgba(139,92,246,0.24); }
+.insight-sim   { color: #F5D68A; background: var(--amber-dim);  border-color: rgba(251,191,36,0.22); }
+.insight-error { color: #F9A8B4; background: var(--rose-dim);   border-color: rgba(251,113,133,0.24); }
+
+/* ── Status pills ───────────────────────────────────────────────────────── */
+.mode-badge, .parity-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 500;
+}
+.mode-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
+.mode-exact { background: var(--mint-dim);   color: var(--mint);   border: 1px solid rgba(52,211,153,0.28); }
+.mode-sim   { background: var(--amber-dim);  color: var(--amber);  border: 1px solid rgba(251,191,36,0.28); }
+.tag-odd    { background: var(--cyan-dim);   color: var(--cyan);   border: 1px solid rgba(34,211,238,0.28); }
+.tag-clean  { background: var(--mint-dim);   color: var(--mint);   border: 1px solid rgba(52,211,153,0.28); }
+.tag-break  { background: var(--violet-dim); color: #A78BFA;       border: 1px solid rgba(139,92,246,0.30); }
+
+/* ── Solver progress ────────────────────────────────────────────────────── */
+.solve-progress { margin-top: 14px; }
+.progress-track {
+  position: relative;
+  height: 4px;
+  background: var(--inset);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progress-fill {
+  position: relative;
+  height: 100%;
+  width: 0%;
+  background: var(--grad);
+  box-shadow: 0 0 14px rgba(34,211,238,0.6);
+  transition: width 0.24s ease;
+}
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+  animation: sweep 1.3s linear infinite;
+}
+@keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.progress-text {
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  color: var(--dimmer);
+}
+
+/* ── Graph viewport ─────────────────────────────────────────────────────── */
+.path-container {
+  position: relative;
+  margin: 4px 0 0;
+  padding: 18px 16px;
+  min-height: 96px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background:
+    repeating-linear-gradient(0deg,  rgba(148,183,214,0.028) 0 1px, transparent 1px 26px),
+    repeating-linear-gradient(90deg, rgba(148,183,214,0.028) 0 1px, transparent 1px 26px),
+    radial-gradient(120% 90% at 50% 0%, rgba(34,211,238,0.05), transparent 62%),
+    var(--inset);
+  overflow: hidden;
+}
+/* instrument crop marks */
+.path-container::before,
+.path-container::after {
+  content: '';
+  position: absolute;
+  width: 11px; height: 11px;
+  border: 1px solid rgba(34,211,238,0.34);
+  pointer-events: none;
+}
+.path-container::before { top: 8px;    left: 8px;  border-right: 0; border-bottom: 0; }
+.path-container::after  { bottom: 8px; right: 8px; border-left: 0;  border-top: 0; }
+
+.edge-layer { position: absolute; top: 18px; left: 16px; overflow: visible; pointer-events: none; z-index: 0; }
+.arc-line { stroke: rgba(148,183,214,0.22); stroke-width: 1.6; fill: none; transition: stroke 0.25s; }
+.arc-line.arc-live { stroke: rgba(34,211,238,0.72); stroke-width: 2; filter: drop-shadow(0 0 4px rgba(34,211,238,0.55)); }
+.arc-wrap { opacity: 0.4; }
+.arc-head { fill: rgba(148,183,214,0.3); }
+.arc-head.arc-live { fill: rgba(34,211,238,0.85); }
+
+.node-col { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 4px; z-index: 1; }
+
+.node {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--line-2);
+  background: radial-gradient(circle at 32% 26%, #16233A, #0B1424);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px;
+  font-weight: 500;
+  font-family: var(--mono);
+  color: var(--dim);
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.34,1.4,0.64,1), border-color 0.18s, box-shadow 0.18s, color 0.18s;
+  flex-shrink: 0;
+  user-select: none;
+}
+.node:hover {
+  border-color: var(--cyan);
+  color: var(--ink);
+  transform: scale(1.12);
+  box-shadow: 0 0 0 3px rgba(34,211,238,0.12), 0 0 16px rgba(34,211,238,0.4);
+}
+.node.blue {
+  background: var(--grad);
+  border-color: rgba(180,240,255,0.75);
+  color: #04121A;
+  font-weight: 700;
+  box-shadow: 0 0 0 1px rgba(34,211,238,0.4), 0 0 18px rgba(34,211,238,0.45), 0 0 34px rgba(139,92,246,0.3);
+}
+.node.optimal { box-shadow: 0 0 0 2px var(--amber), 0 0 16px rgba(251,191,36,0.42); }
+.node.optimal.blue {
+  box-shadow: 0 0 0 2px var(--amber), 0 0 18px rgba(251,191,36,0.5), 0 0 30px rgba(139,92,246,0.28);
+}
+.node-small { width: 26px; height: 26px; font-size: 9px; }
+.node-tiny  { width: 20px; height: 20px; font-size: 8px; border-width: 1px; }
+
+.prob-label {
+  font-size: 8.5px;
+  font-family: var(--mono);
+  letter-spacing: 0.03em;
+  color: var(--dim);
+  text-shadow: 0 0 4px var(--inset), 0 0 6px var(--inset);
+  text-align: center;
+  min-height: 11px;
+  line-height: 1;
+}
+.prob-label.p1    { color: var(--mint);  text-shadow: 0 0 8px rgba(52,211,153,0.5); }
+.prob-label.phalf { color: var(--amber); }
+.prob-label.p0    { color: #3D4E63; }
+
+.vp-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 12px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: var(--dimmer);
+}
+.vp-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.vp-legend i {
+  width: 7px; height: 7px; border-radius: 50%;
+  display: inline-block; font-style: normal; flex-shrink: 0;
+}
+
+/* ── Reference list ─────────────────────────────────────────────────────── */
+.ref { list-style: none; display: flex; flex-direction: column; gap: 11px; }
+.ref li {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.62;
+  color: var(--dim);
+  padding-left: 11px;
+  border-left: 1px solid var(--line-2);
+}
+.ref li b {
+  display: block;
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  margin-bottom: 3px;
+}
+.ref li em { font-style: normal; color: var(--ink); }
+
+/* ── Result readout ─────────────────────────────────────────────────────── */
+.ept-result {
+  position: relative;
+  margin-top: 16px;
+  padding: 16px 18px;
+  background: linear-gradient(180deg, rgba(17,28,46,0.9), rgba(8,14,25,0.92));
+  border: 1px solid rgba(34,211,238,0.24);
+  border-radius: var(--r-sm);
+  display: none;
+  overflow: hidden;
+}
+.ept-result.visible { display: block; animation: rise 0.4s cubic-bezier(0.22,0.72,0.28,1) both; }
+.ept-result::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 2px;
+  background: var(--grad);
+  box-shadow: 0 0 14px rgba(34,211,238,0.55);
+}
+.ept-result-label {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--dimmer);
+  margin-bottom: 8px;
+}
+.ept-result-val {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 2.6rem;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  margin-bottom: 10px;
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-variant-numeric: tabular-nums;
+}
+.ept-result-interp { font-size: 12.5px; color: var(--dim); line-height: 1.6; }
+.ept-result-throttle {
+  margin-top: 11px;
+  padding-top: 11px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--dim);
+  letter-spacing: 0.03em;
+}
+.cur-explain {
+  font-size: 11.5px;
+  color: var(--dimmer);
+  margin-top: 10px;
+  min-height: 17px;
+  font-family: var(--mono);
+  letter-spacing: 0.02em;
+}
+
+.spinner {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border: 1.5px solid rgba(4,18,26,0.35);
+  border-top-color: #04121A;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: -1px;
+  margin-right: 7px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Ranked sets ────────────────────────────────────────────────────────── */
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 13px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: rgba(8,14,25,0.5);
+  margin-bottom: 6px;
+  transition: border-color 0.16s, background 0.16s, transform 0.16s;
+  font-size: 12px;
+}
+.set-row:hover { background: rgba(17,28,46,0.85); border-color: var(--line-3); transform: translateX(2px); }
+.set-row.best {
+  border-color: rgba(52,211,153,0.34);
+  background: linear-gradient(90deg, rgba(52,211,153,0.10), rgba(52,211,153,0.02));
+}
+.set-label { flex: 1; font-family: var(--mono); color: var(--ink); font-size: 11px; }
+.set-sum   { color: var(--dimmer); font-size: 10.5px; font-family: var(--mono); margin-right: 6px; }
+.set-val   { font-weight: 600; font-family: var(--mono); min-width: 46px; text-align: right; font-variant-numeric: tabular-nums; }
+.badge {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.badge-green { background: var(--mint-dim); color: var(--mint); border: 1px solid rgba(52,211,153,0.3); }
+
+/* ── Chart ──────────────────────────────────────────────────────────────── */
+.chart-wrap { height: 230px; position: relative; margin-top: 4px; }
+.chart-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 14px; }
+.legend-item {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 10px;
+  color: var(--dimmer);
+  font-family: var(--mono);
+  letter-spacing: 0.05em;
+}
+.legend-dot  { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.legend-line { width: 18px; height: 0; flex-shrink: 0; }
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+.foot {
+  position: relative;
+  z-index: 2;
+  border-top: 1px solid var(--line);
+  padding: 26px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dimmer);
+}
+.foot b { color: var(--dim); font-weight: 400; }
+
+/* ── Scrollbar ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--void); }
+::-webkit-scrollbar-thumb { background: #1A2942; border-radius: 5px; border: 2px solid var(--void); }
+::-webkit-scrollbar-thumb:hover { background: #24405F; }
+::selection { background: rgba(34,211,238,0.28); color: #fff; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="atmos" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+
+<header class="rail">
+  <div class="rail-in">
+    <div class="mark">
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+        <defs>
+          <linearGradient id="mg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#22D3EE"/>
+            <stop offset="100%" stop-color="#8B5CF6"/>
+          </linearGradient>
+        </defs>
+        <path d="M4 15 L11 5 L18 15" stroke="url(#mg)" stroke-width="1.4" fill="none" opacity="0.85"/>
+        <path d="M4 15 L18 15" stroke="url(#mg)" stroke-width="1.4" fill="none" opacity="0.4"/>
+        <circle cx="11" cy="5"  r="2.6" fill="url(#mg)"/>
+        <circle cx="4"  cy="15" r="2.2" fill="#0C1422" stroke="#22D3EE" stroke-width="1.2"/>
+        <circle cx="18" cy="15" r="2.2" fill="#0C1422" stroke="#8B5CF6" stroke-width="1.2"/>
+      </svg>
+      <span class="mark-txt">RZF<i>/</i><b>THROTTLE</b></span>
+    </div>
+    <div class="rail-meta">
+      <span class="chip"><b id="rail-n">—</b><i>vertices</i></span>
+      <span class="chip"><b id="rail-arcs">—</b><i>arcs</i></span>
+      <span class="chip opt"><b id="rail-states">—</b><i>states</i></span>
+    </div>
+  </div>
+</header>
+
+<main class="shell">
+
+  <section class="hero">
+    <div class="eyebrow">Randomized zero forcing · throttling</div>
+    <h1 class="title">Where set size stops<br>paying for <span>speed</span>.</h1>
+    <p class="lede">
+      In <strong>randomized zero forcing</strong> a white vertex turns blue with probability equal to the
+      fraction of its <em>in</em>-neighbours that are already blue. The <strong>throttling number</strong>
+      asks how to spend a budget: every vertex you start blue costs one, and every round you wait costs one.
+      Build a starting set on any family below, measure its expected propagation time, and solve for the
+      exact optimum.
+    </p>
+    <div class="formula">
+      <em>th</em><sub>rzf</sub>(G) &nbsp;=&nbsp; <b>min</b><sub>S ⊆ V(G)</sub> ( |S| &nbsp;+&nbsp; <em>ept</em><sub>rzf</sub>(G, S) )
+    </div>
+  </section>
+
+  <div class="grid">
+
+    <!-- ── control column ─────────────────────────────────────────────── -->
+    <div class="col-l">
+
+      <div class="panel">
+        <div class="card-title">Graph family<span class="idx">01</span></div>
+        <div class="fam-grid" id="fam-grid"></div>
+        <div class="fam-params" id="fam-params"></div>
+        <div class="fam-summary" id="fam-summary"></div>
+        <div class="insight insight-sim" id="cost-warn" style="display:none"></div>
+        <div class="btn-row">
+          <button class="primary" id="solve-btn" onclick="startSolve()">Compute exact throttling</button>
+          <button id="cancel-btn" onclick="cancelSolve()" style="display:none">cancel</button>
+        </div>
+        <div class="solve-progress" id="solve-progress" style="display:none">
+          <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+          <div class="progress-text" id="progress-text"></div>
+        </div>
+        <div class="ept-result" id="fam-result">
+          <div class="ept-result-label" id="fam-result-label">exact throttling number</div>
+          <div class="ept-result-val" id="fam-result-val">—</div>
+          <div class="ept-result-interp" id="fam-result-interp"></div>
+          <div class="ept-result-throttle" id="fam-result-detail"></div>
+        </div>
+      </div>
+
+      <div class="panel" id="path-config-card">
+        <div class="card-title">Path analysis<span class="idx">02</span></div>
+        <div class="slider-row">
+          <span class="slider-label">n =</span>
+          <input type="range" min="2" max="60" step="1" value="7" id="n-slider" oninput="setN(+this.value)">
+          <span class="slider-val" id="n-label">7</span>
+          <span class="parity-tag tag-odd" id="parity-tag">odd</span>
+          <span class="mode-badge mode-exact" id="mode-badge"><span class="mode-dot"></span>exact</span>
+        </div>
+
+        <div id="exact-metrics">
+          <div class="metrics-grid">
+            <div class="metric"><div class="metric-val good"   id="m-th">4.00</div><div class="metric-label">th_rzf</div></div>
+            <div class="metric"><div class="metric-val accent" id="m-s">3</div><div class="metric-label">optimal |S|</div></div>
+            <div class="metric"><div class="metric-val"        id="m-ept">1.00</div><div class="metric-label">EPT from S*</div></div>
+            <div class="metric"><div class="metric-val"        id="m-formula">4</div><div class="metric-label">⌊n/2⌋+1</div></div>
+          </div>
+          <div class="insight insight-odd" id="insight-box">Loading…</div>
+        </div>
+
+        <div id="sim-note" style="display:none">
+          <div class="insight insight-sim">
+            Beyond n = 19 no exact value is precomputed. Build a starting set in the viewport and hit
+            <strong>Find EPT</strong> to measure it by simulation, or run the exact solver above.
+            A single endpoint uses the closed form EPT = 2n − 3.
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="card-title">Reference<span class="idx">03</span></div>
+        <ul class="ref">
+          <li><b>finiteness</b><em>ept</em>(G,S) &lt; ∞ ⟺ every vertex is reachable from S along directed edges</li>
+          <li><b>bounds</b>2 ≤ <em>th</em>(G) ≤ min( n, 1 + <em>ept</em>(G) )</li>
+          <li><b>lower bound</b><em>ept</em>(G,S) ≥ ecc(S), so <em>th</em>(G) ≥ min<sub>k</sub> ( k + rad<sub>k</sub>(G) )</li>
+          <li><b>bidirected path</b><em>ept</em>(P<sub>n</sub>, endpoint) = 2n − 3</li>
+          <li><b>arborescence</b>propagation is deterministic; <em>ept</em>(T, r) = ecc(r)</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- ── viewport column ────────────────────────────────────────────── -->
+    <div class="col-r">
+
+      <div class="panel viewport">
+        <div class="card-title" id="diagram-title">Bidirectional path — click vertices to toggle blue<span class="idx">VIEWPORT</span></div>
+        <div class="path-container" id="path-wrap"></div>
+
+        <div class="vp-legend">
+          <span><i style="background:linear-gradient(118deg,#22D3EE,#8B5CF6)"></i>blue / initial set</span>
+          <span><i style="background:#0B1424;border:1px solid rgba(148,183,214,0.35)"></i>white</span>
+          <span><i style="background:#34D399"></i>p = 1</span>
+          <span><i style="background:#FBBF24"></i>0 &lt; p &lt; 1</span>
+          <span><i style="background:#3D4E63"></i>p = 0</span>
+        </div>
+
+        <div class="metrics-grid-3" id="cur-metrics">
+          <div class="metric"><div class="metric-val" id="cur-s">0</div><div class="metric-label">|S| selected</div></div>
+          <div class="metric"><div class="metric-val" id="cur-ept">—</div><div class="metric-label">EPT from S</div></div>
+          <div class="metric"><div class="metric-val" id="cur-th">—</div><div class="metric-label">|S| + EPT</div></div>
+        </div>
+
+        <div class="cur-explain" id="cur-explain">select some vertices above</div>
+
+        <div class="btn-row">
+          <button class="primary" id="find-ept-btn" onclick="handleFindEPT()">Find EPT</button>
+          <button onclick="setOptimal()" id="show-opt-btn">show optimal set</button>
+          <button onclick="clearNodes()">clear</button>
+        </div>
+
+        <div class="ept-result" id="ept-result">
+          <div class="ept-result-label" id="ept-result-label">estimated EPT</div>
+          <div class="ept-result-val" id="ept-result-val">—</div>
+          <div class="ept-result-interp" id="ept-result-interp"></div>
+          <div class="ept-result-throttle" id="ept-result-throttle"></div>
+        </div>
+      </div>
+
+      <div class="panel" id="sets-card">
+        <div class="card-title">Starting sets ranked by throttle value<span class="idx">Ranked</span></div>
+        <div id="sets-list"></div>
+      </div>
+
+      <div class="panel" id="chart-card">
+        <div class="card-title">Throttling number, n = 2 … 19<span class="idx">Trend</span></div>
+        <div class="chart-wrap"><canvas id="chart"></canvas></div>
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#22D3EE"></div>odd n — clean formula</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#34D399"></div>even n — clean formula</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#8B5CF6"></div>formula breaks</div>
+          <div class="legend-item"><div class="legend-line" style="border-top:2px dashed #FBBF24"></div>⌊n/2⌋+1 prediction</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<footer class="foot">
+  <b>RZF Throttling Explorer</b> · exact Markov solver + Monte-Carlo estimator · randomized zero forcing on directed graphs
+</footer>
+
+<script>
+// ─── Precomputed data for n=2..19 ───────────────────────────────────────────
+const DATA = {
+  2:{th:2,s:1,ept:1,opt:[0]},
+  3:{th:2,s:1,ept:1,opt:[1]},
+  4:{th:3,s:2,ept:1,opt:[2,0]},
+  5:{th:3,s:2,ept:1,opt:[3,1]},
+  6:{th:4,s:2,ept:2,opt:[4,1]},
+  7:{th:4,s:3,ept:1,opt:[5,3,1]},
+  8:{th:5,s:3,ept:2,opt:[6,3,1]},
+  9:{th:5,s:4,ept:1,opt:[7,5,3,1]},
+  10:{th:6,s:4,ept:2,opt:[8,5,3,1]},
+  11:{th:6,s:5,ept:1,opt:[9,7,5,3,1]},
+  12:{th:6.6286,s:4,ept:2.6286,opt:[10,7,4,1]},
+  13:{th:7,s:6,ept:1,opt:[11,9,7,5,3,1]},
+  14:{th:7.6049,s:4,ept:3.6049,opt:[12,8,4,1]},
+  15:{th:7.7966,s:5,ept:2.7966,opt:[13,10,7,4,1]},
+  16:{th:8.2228,s:4,ept:4.2228,opt:[13,9,5,1]},
+  17:{th:8.5129,s:4,ept:4.5129,opt:[14,10,6,2]},
+  18:{th:8.8862,s:4,ept:4.8862,opt:[15,10,6,2]},
+  19:{th:9.1171,s:5,ept:4.1171,opt:[17,13,9,5,1]}
+};
+
+const EXACT_LIMIT = 14;
+let curN = 7;
+let selectedNodes = new Set();
+let chart = null;
+let curG = null;
+
+// ─── Digraph representation ──────────────────────────────────────────────────
+// Every graph is a digraph. An undirected edge is stored as two opposing arcs,
+// so `inN[v]` is the authoritative in-neighbor list used by the RZF rule.
+function makeDigraph(n) {
+  return {
+    n,
+    outN: Array.from({ length: n }, () => []),
+    inN: Array.from({ length: n }, () => [])
+  };
+}
+
+function addArc(G, u, v) {
+  if (u === v) return;
+  if (G.outN[u].includes(v)) return;
+  G.outN[u].push(v);
+  G.inN[v].push(u);
+}
+
+// Undirected edge = a symmetric pair of arcs.
+function addEdge(G, u, v) {
+  addArc(G, u, v);
+  addArc(G, v, u);
+}
+
+function hasArc(G, u, v) {
+  return G.outN[u].includes(v);
+}
+
+// All arcs as [u, v] pairs.
+function arcList(G) {
+  const arcs = [];
+  for (let u = 0; u < G.n; u++) for (const v of G.outN[u]) arcs.push([u, v]);
+  return arcs;
+}
+
+function makeBidirectionalPath(n) {
+  const G = makeDigraph(n);
+  for (let i = 0; i < n - 1; i++) addEdge(G, i, i + 1);
+  return G;
+}
+
+// ─── Graph family generators ─────────────────────────────────────────────────
+// `directed` selects the one-way orientation; otherwise every edge is mirrored.
+function genPath(p) {
+  const G = makeDigraph(p.n);
+  for (let i = 0; i < p.n - 1; i++) {
+    if (p.directed) addArc(G, i, i + 1); else addEdge(G, i, i + 1);
+  }
+  return G;
+}
+
+function genCycle(p) {
+  const G = makeDigraph(p.n);
+  for (let i = 0; i < p.n; i++) {
+    const j = (i + 1) % p.n;
+    if (p.directed) addArc(G, i, j); else addEdge(G, i, j);
+  }
+  return G;
+}
+
+// K_{1,n}: centre 0 with n leaves. K_n: all pairs adjacent.
+function genStarComplete(p) {
+  if (p.kind === 'complete') {
+    const G = makeDigraph(p.n);
+    for (let i = 0; i < p.n; i++) for (let j = i + 1; j < p.n; j++) addEdge(G, i, j);
+    return G;
+  }
+  const G = makeDigraph(p.n + 1);
+  for (let i = 1; i <= p.n; i++) {
+    if (p.directed) addArc(G, 0, i); else addEdge(G, 0, i);
+  }
+  return G;
+}
+
+// K_{m,n}: parts {0..m-1} and {m..m+n-1}.
+function genBipartite(p) {
+  const G = makeDigraph(p.m + p.n);
+  for (let i = 0; i < p.m; i++) {
+    for (let j = 0; j < p.n; j++) {
+      if (p.directed) addArc(G, i, p.m + j); else addEdge(G, i, p.m + j);
+    }
+  }
+  return G;
+}
+
+// Spider: centre 0 with k legs of length L (equal-length legs only).
+function genSpider(p) {
+  const G = makeDigraph(1 + p.k * p.L);
+  let next = 1;
+  for (let leg = 0; leg < p.k; leg++) {
+    let prev = 0;
+    for (let step = 0; step < p.L; step++) {
+      const v = next++;
+      if (p.directed) addArc(G, prev, v); else addEdge(G, prev, v);
+      prev = v;
+    }
+  }
+  return G;
+}
+
+// Base trees, returned as undirected edge lists rooted for later orientation.
+function treeEdges(base, size) {
+  const E = [];
+  if (base === 'path') {
+    for (let i = 0; i < size - 1; i++) E.push([i, i + 1]);
+  } else if (base === 'star') {
+    for (let i = 1; i < size; i++) E.push([0, i]);
+  } else if (base === 'caterpillar') {
+    // Spine 0..s-1, one leaf hung off each spine vertex.
+    const s = Math.max(1, Math.ceil(size / 2));
+    for (let i = 0; i < s - 1; i++) E.push([i, i + 1]);
+    let leaf = s;
+    for (let i = 0; i < s && leaf < size; i++) E.push([i, leaf++]);
+  } else { // complete binary
+    for (let i = 1; i < size; i++) E.push([(i - 1) >> 1, i]);
+  }
+  return E;
+}
+
+// Out-arborescence: orient every edge away from the root (BFS from root).
+function genTree(p) {
+  const size = p.n;
+  const E = treeEdges(p.base, size);
+  const G = makeDigraph(size);
+  if (!p.directed) {
+    for (const [u, v] of E) addEdge(G, u, v);
+    return G;
+  }
+  const adj = Array.from({ length: size }, () => []);
+  for (const [u, v] of E) { adj[u].push(v); adj[v].push(u); }
+  const root = Math.min(p.root, size - 1);
+  const seen = new Array(size).fill(false);
+  const queue = [root];
+  seen[root] = true;
+  while (queue.length) {
+    const u = queue.shift();
+    for (const v of adj[u]) if (!seen[v]) { seen[v] = true; addArc(G, u, v); queue.push(v); }
+  }
+  return G;
+}
+
+// ─── RZF forcing rule ────────────────────────────────────────────────────────
+// A white vertex turns blue with probability (# blue in-neighbors)/(# in-neighbors).
+// This is the randomized rule — every white vertex with at least one blue
+// in-neighbor gets an independent coin flip. There is no "exactly one white
+// neighbor" restriction; that belongs to classical (deterministic) zero forcing.
+function blueInDegree(G, v, blue) {
+  let bp = 0;
+  for (const u of G.inN[v]) if (blue.has(u)) bp++;
+  return bp;
+}
+
+function forceProb(G, v, blue) {
+  const deg = G.inN[v].length;
+  if (!deg) return 0;
+  return blueInDegree(G, v, blue) / deg;
+}
+
+// ─── Reachability ────────────────────────────────────────────────────────────
+// Theorem 2.1 (Geneson et al.): ept_rzf(G,S) < infinity  <=>  every vertex is
+// reachable from S along directed edges. Checking this first is what keeps the
+// simulator from reporting a finite number for a set that can never finish.
+function allReachable(G, startSet) {
+  const seen = new Uint8Array(G.n);
+  const stack = [];
+  for (const v of startSet) if (!seen[v]) { seen[v] = 1; stack.push(v); }
+  let count = stack.length;
+  while (stack.length) {
+    const u = stack.pop();
+    for (const w of G.outN[u]) if (!seen[w]) { seen[w] = 1; count++; stack.push(w); }
+  }
+  return count === G.n;
+}
+
+// ─── Simulation ──────────────────────────────────────────────────────────────
+// One trial: returns the number of rounds to colour everything, or `cap` if the
+// cap was hit. Uses a flat Uint8Array rather than a Set — the inner loop runs
+// trials x rounds x n times, so allocation here dominates everything.
+function runTrial(G, startSet, cap) {
+  const n = G.n;
+  const blue = new Uint8Array(n);
+  const fresh = new Uint8Array(n);
+  let count = 0;
+  for (const v of startSet) if (!blue[v]) { blue[v] = 1; count++; }
+  let rounds = 0;
+  while (count < n && rounds < cap) {
+    rounds++;
+    let added = 0;
+    for (let v = 0; v < n; v++) {
+      if (blue[v]) continue;
+      const preds = G.inN[v];
+      const d = preds.length;
+      if (!d) continue;
+      let bp = 0;
+      for (let i = 0; i < d; i++) if (blue[preds[i]]) bp++;
+      if (bp > 0 && Math.random() < bp / d) { fresh[v] = 1; added++; }
+    }
+    if (added) {
+      for (let v = 0; v < n; v++) if (fresh[v]) { fresh[v] = 0; blue[v] = 1; count++; }
+    }
+  }
+  return rounds;
+}
+
+// Monte-Carlo EPT with an honest error bar.
+//
+// Returns { infinite } when S cannot colour the graph, otherwise
+// { mean, se, trials, capped, cap }. `se` is the standard error of the mean, so
+// the estimate is mean +/- 1.96*se at 95%. The round cap scales with the graph
+// instead of being fixed at 500, and any truncation is reported rather than
+// silently folded into the mean.
+function simulateEPTStats(startSet, G, targetTrials = 100000) {
+  if (!startSet.length) return { infinite: true };
+  if (startSet.length >= G.n) return { mean: 0, se: 0, trials: 0, capped: 0, cap: 0 };
+  if (!allReachable(G, startSet)) return { infinite: true };
+
+  const n = G.n;
+  // Pilot run to size both the round cap and the trial count.
+  let pilotSum = 0;
+  const pilotN = 60, pilotCap = 200000;
+  for (let t = 0; t < pilotN; t++) pilotSum += runTrial(G, startSet, pilotCap);
+  const pilotMean = Math.max(1, pilotSum / pilotN);
+
+  // Generous cap: truncation below this is negligible for a process that
+  // finishes almost surely, and cap hits are counted anyway.
+  const cap = Math.ceil(40 * pilotMean + 200);
+
+  // Keep the UI responsive: bound total vertex-updates, never go below 2000
+  // trials (se would stop being meaningful).
+  const BUDGET = 6e7;
+  const perTrial = Math.max(1, pilotMean * n);
+  let trials = Math.min(targetTrials, Math.max(2000, Math.floor(BUDGET / perTrial)));
+
+  let sum = 0, sumSq = 0, capped = 0;
+  for (let t = 0; t < trials; t++) {
+    const r = runTrial(G, startSet, cap);
+    if (r >= cap) capped++;
+    sum += r; sumSq += r * r;
+  }
+  const mean = sum / trials;
+  const varc = Math.max(0, sumSq / trials - mean * mean);
+  return { mean, se: Math.sqrt(varc / trials), trials, capped, cap };
+}
+
+// Back-compat wrapper: plain number, Infinity when S cannot finish.
+function simulateEPT(startSet, G, trials = 10000) {
+  const r = simulateEPTStats(startSet, G, trials);
+  return r.infinite ? Infinity : r.mean;
+}
+
+function isEndpoint(v, n) {
+  return v === 0 || v === n - 1;
+}
+
+function exactEndpointEPT(n) {
+  return 2 * n - 3;
+}
+
+// Exact closed forms, used in preference to simulation wherever one applies.
+// Bidirectional path from an endpoint: ept = 2n-3 (Cor. 3.6).
+function exactEPTIfKnown(startSet, G) {
+  if (curFamily === 'path' && !curParams.directed && startSet.length === 1
+      && isEndpoint(startSet[0], G.n) && G.n >= 2) {
+    return G.n === 2 ? 1 : exactEndpointEPT(G.n);
+  }
+  return null;
+}
+
+// ─── Approximate EPT for inline display ──────────────────────────────────────
+function approxEPT(startSet, G) {
+  const exact = exactEPTIfKnown(startSet, G);
+  if (exact !== null) return exact;
+  return simulateEPT(startSet, G, 4000);
+}
+
+// ─── Combinations helper ─────────────────────────────────────────────────────
+function combinations(arr, k) {
+  if (k === 0) return [[]];
+  if (arr.length === 0) return [];
+  const [first, ...rest] = arr;
+  return [
+    ...combinations(rest, k - 1).map(c => [first, ...c]),
+    ...combinations(rest, k)
+  ];
+}
+
+// ─── Estimate EPT for exact mode display ─────────────────────────────────────
+function estimateEPT(blueSet, G) {
+  const n = G.n;
+  if (blueSet.length === n) return 0;
+  // The DATA table only describes the bidirectional path.
+  const d = isLegacyPath() ? DATA[n] : null;
+  if (d) {
+    const optSet = new Set(d.opt);
+    const mySet = new Set(blueSet);
+    const match = mySet.size === optSet.size && [...mySet].every(v => optSet.has(v));
+    if (match) return d.ept;
+  }
+  return approxEPT(blueSet, G);
+}
+
+// True only for the exact configuration the precomputed DATA table describes.
+function isLegacyPath() {
+  return curFamily === 'path' && !curParams.directed && !!DATA[curG ? curG.n : -1];
+}
+
+// Inline auto-estimation is off for every family: a number should appear only
+// when it has been asked for, at a trial count the user can see. Find EPT is
+// therefore always available, on every family and every n.
+function autoEstimate() {
+  return false;
+}
+
+// ─── Main setN ───────────────────────────────────────────────────────────────
+// Legacy path slider: drives the `path` family parameters.
+function setN(n) {
+  curFamily = 'path';
+  curParams.n = n;
+  if (curParams.directed === undefined) curParams.directed = false;
+  renderFamilyButtons();
+  rebuildGraph();
+}
+
+// Path-specific analysis (precomputed DATA table, parity insight, sets list).
+function updatePathAnalysis(n) {
+  curN = n;
+  document.getElementById('n-label').textContent = n;
+
+  const isOdd = n % 2 === 1;
+  const formula = Math.floor(n / 2) + 1;
+  const d = DATA[n];
+  const isExact = n <= EXACT_LIMIT;
+  const isClean = d && Math.abs(d.th - formula) < 0.01;
+
+  // Parity tag
+  const tag = document.getElementById('parity-tag');
+  if (isOdd) { tag.textContent = 'odd'; tag.className = 'parity-tag tag-odd'; }
+  else if (isClean) { tag.textContent = 'even · clean'; tag.className = 'parity-tag tag-clean'; }
+  else { tag.textContent = 'even · breaks'; tag.className = 'parity-tag tag-break'; }
+
+  // Mode badge
+  const mb = document.getElementById('mode-badge');
+  if (isExact) { mb.textContent = ''; mb.innerHTML = '<span class="mode-dot"></span>exact'; mb.className = 'mode-badge mode-exact'; }
+  else { mb.textContent = ''; mb.innerHTML = '<span class="mode-dot"></span>simulation'; mb.className = 'mode-badge mode-sim'; }
+
+  // Show/hide sections
+  document.getElementById('exact-metrics').style.display = isExact ? 'block' : 'none';
+  document.getElementById('sim-note').style.display = isExact ? 'none' : 'block';
+  document.getElementById('sets-card').style.display = isExact ? 'block' : 'none';
+  document.getElementById('find-ept-btn').style.display = 'inline-block';
+  document.getElementById('show-opt-btn').style.display = d ? 'inline-block' : 'none';
+  document.getElementById('ept-result').classList.remove('visible');
+
+  // Exact metrics
+  if (isExact && d) {
+    document.getElementById('m-th').textContent = d.th.toFixed(2);
+    document.getElementById('m-th').className = 'metric-val ' + (isOdd ? 'good' : (isClean ? 'good' : 'bad'));
+    document.getElementById('m-s').textContent = d.s;
+    document.getElementById('m-ept').textContent = d.ept.toFixed(2);
+    document.getElementById('m-formula').textContent = formula;
+
+    const box = document.getElementById('insight-box');
+    if (isOdd) {
+      box.className = 'insight insight-odd';
+      box.textContent = `n=${n} is odd. The formula ⌊n/2⌋+1 = ${formula} holds exactly. Every white vertex has p=1 from the optimal set — the process finishes in exactly 1 round.`;
+    } else if (isClean) {
+      box.className = 'insight insight-clean';
+      box.textContent = `n=${n} is even and the formula ⌊n/2⌋+1 = ${formula} still holds. One boundary bottleneck pair adds exactly 1 extra round to EPT but the throttle sum stays a clean integer.`;
+    } else {
+      box.className = 'insight insight-break';
+      box.textContent = `n=${n}: the formula predicts ${formula} but th_rzf = ${d.th.toFixed(4)}. Multiple simultaneous bottleneck pairs compound the randomness, producing a fractional throttling number.`;
+    }
+    renderSets();
+  }
+
+  highlightChart(n);
+}
+
+// ─── Layout ──────────────────────────────────────────────────────────────────
+function nodePx(n) {
+  return n <= 20 ? 34 : (n <= 40 ? 26 : 20);
+}
+
+function nodeSizeClass(n) {
+  return n <= 20 ? '' : (n <= 40 ? 'node-small' : 'node-tiny');
+}
+
+// Straight-line layout, wrapping to additional rows when it runs out of width.
+// Reproduces the row-of-circles look the flexbox version produced.
+function layoutLine(n, availW, nodeW) {
+  const pitch = nodeW + 20;          // node + gap + connector + gap
+  const rowH = nodeW + 46;           // node + label + gap for wrap-edge routing
+  const perRow = Math.max(1, Math.floor(availW / pitch));
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const r = Math.floor(i / perRow), c = i % perRow;
+    pts.push({ x: c * pitch + nodeW / 2, y: r * rowH + nodeW / 2 });
+  }
+  return {
+    pts,
+    kind: 'line',
+    width: Math.min(n, perRow) * pitch,
+    height: Math.ceil(n / perRow) * rowH
+  };
+}
+
+// Circular layout — cycles and K_n.
+function layoutCircle(n, availW, nodeW) {
+  const R = Math.max(nodeW * 1.2, Math.min(availW / 2 - nodeW, 14 + n * nodeW / 3.2));
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const a = -Math.PI / 2 + (2 * Math.PI * i) / n;
+    pts.push({ x: R + R * Math.cos(a) + nodeW / 2, y: R + R * Math.sin(a) + nodeW / 2 });
+  }
+  const side = 2 * R + nodeW;
+  return { pts, width: side, height: side + 14 };
+}
+
+// Radial layout — centre plus rays. `legs` is an array of vertex-index arrays.
+function layoutRadial(n, legs, availW, nodeW) {
+  const maxLen = legs.reduce((m, l) => Math.max(m, l.length), 1);
+  const step = nodeW + 26;   // room for the p-label between consecutive vertices
+  const R = Math.min(availW / 2 - nodeW, maxLen * step);
+  const pts = new Array(n);
+  const cx = R + nodeW / 2, cy = R + nodeW / 2;
+  pts[0] = { x: cx, y: cy };
+  legs.forEach((leg, li) => {
+    const a = -Math.PI / 2 + (2 * Math.PI * li) / legs.length;
+    leg.forEach((v, si) => {
+      const rr = R * ((si + 1) / maxLen);
+      pts[v] = { x: cx + rr * Math.cos(a), y: cy + rr * Math.sin(a) };
+    });
+  });
+  for (let i = 0; i < n; i++) if (!pts[i]) pts[i] = { x: cx, y: cy };
+  const side = 2 * R + nodeW;
+  return { pts, width: side, height: side + 14 };
+}
+
+// Two-column layout — complete bipartite.
+function layoutTwoCol(m, n, availW, nodeW) {
+  const colGap = Math.min(availW - nodeW * 2, Math.max(180, nodeW * 6));
+  const vGap = nodeW + 20;
+  const rows = Math.max(m, n);
+  const pts = [];
+  const off = (count) => (rows - count) * vGap / 2;
+  for (let i = 0; i < m; i++) pts.push({ x: nodeW / 2, y: off(m) + i * vGap + nodeW / 2 });
+  for (let j = 0; j < n; j++) pts.push({ x: nodeW / 2 + colGap, y: off(n) + j * vGap + nodeW / 2 });
+  return { pts, width: colGap + nodeW, height: rows * vGap + 14 };
+}
+
+// Layered layout — trees, by BFS depth from the root.
+function layoutLayered(G, root, availW, nodeW) {
+  const n = G.n;
+  const depth = new Array(n).fill(-1);
+  const queue = [root];
+  depth[root] = 0;
+  const nbrs = (u) => [...new Set([...G.outN[u], ...G.inN[u]])];
+  while (queue.length) {
+    const u = queue.shift();
+    for (const v of nbrs(u)) if (depth[v] === -1) { depth[v] = depth[u] + 1; queue.push(v); }
+  }
+  for (let i = 0; i < n; i++) if (depth[i] === -1) depth[i] = 0;
+  const levels = [];
+  for (let i = 0; i < n; i++) (levels[depth[i]] ||= []).push(i);
+  const rowH = nodeW + 34;
+  const widest = levels.reduce((m, l) => Math.max(m, l.length), 1);
+  const pitch = Math.max(nodeW + 10, Math.min(nodeW + 26, availW / widest));
+  const pts = new Array(n);
+  levels.forEach((lvl, d) => {
+    const w = lvl.length * pitch;
+    lvl.forEach((v, i) => {
+      pts[v] = { x: (widest * pitch - w) / 2 + i * pitch + nodeW / 2, y: d * rowH + nodeW / 2 };
+    });
+  });
+  return { pts, width: widest * pitch, height: levels.length * rowH + 14 };
+}
+
+function layoutFor(G, availW) {
+  const nodeW = nodePx(G.n);
+  const f = curFamily, p = curParams;
+  if (f === 'cycle') return layoutCircle(G.n, availW, nodeW);
+  if (f === 'star') {
+    if (p.kind === 'complete') return layoutCircle(G.n, availW, nodeW);
+    return layoutRadial(G.n, Array.from({ length: p.n }, (_, i) => [i + 1]), availW, nodeW);
+  }
+  if (f === 'bipartite') return layoutTwoCol(p.m, p.n, availW, nodeW);
+  if (f === 'spider') {
+    const legs = [];
+    let v = 1;
+    for (let k = 0; k < p.k; k++) { const leg = []; for (let s = 0; s < p.L; s++) leg.push(v++); legs.push(leg); }
+    return layoutRadial(G.n, legs, availW, nodeW);
+  }
+  if (f === 'tree') return layoutLayered(G, Math.min(p.root, G.n - 1), availW, nodeW);
+  return layoutLine(G.n, availW, nodeW);
+}
+
+// ─── Render graph ────────────────────────────────────────────────────────────
+// Draws an SVG edge layer, then absolutely-positioned node divs on top.
+// Arrowheads are drawn only on arcs whose reverse arc is absent, so a fully
+// symmetric digraph (every edge mirrored) still reads as undirected.
+function renderGraph() {
+  const G = curG, n = G.n;
+  // The DATA optimal set describes the bidirectional path only — never ring
+  // vertices on another family with it.
+  const d = isLegacyPath() ? DATA[n] : null;
+  const optSet = new Set(d ? d.opt : []);
+  const wrap = document.getElementById('path-wrap');
+
+  const nodeW = nodePx(n);
+  const sizeClass = nodeSizeClass(n);
+  const availW = Math.max(120, wrap.clientWidth - 32);
+  const { pts, width, height, kind } = layoutFor(G, availW);
+  const r = nodeW / 2 + 2;           // circle radius + border
+  const padX = 16 + Math.max(0, (availW - width) / 2);   // centre in the card
+
+  // Edge layer. A symmetric pair is drawn once (u<v) with no arrowhead.
+  let svg = '';
+  for (const [u, v] of arcList(G)) {
+    const symmetric = hasArc(G, v, u);
+    if (symmetric && u > v) continue;
+    // An arc is "live" when it can actually carry colour this round: its tail
+    // is blue (or, for a symmetric pair drawn once, either endpoint is).
+    const live = selectedNodes.has(u) || (symmetric && selectedNodes.has(v));
+    const liveCls = live ? ' arc-live' : '';
+    const a = pts[u], b = pts[v];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    if (len <= 2 * r) continue;
+    const ux = dx / len, uy = dy / len;
+    const x1 = a.x + ux * r, y1 = a.y + uy * r;
+    const x2 = b.x - ux * r, y2 = b.y - uy * r;
+
+    // Row-break routing applies only to the wrapped line layout; in the other
+    // layouts a vertical offset is just the shape of the graph.
+    const wrapped = kind === 'line' && Math.abs(a.y - b.y) > 1;
+    let tx = ux, ty = uy;
+    if (wrapped) {
+      // Dive into the inter-row gap, run back, and rise into the target row,
+      // so the edge never cuts across the vertices it passes.
+      const dip = Math.abs(b.y - a.y) * 0.85;
+      const c1x = a.x + nodeW, c1y = a.y + dip, c2x = b.x - nodeW, c2y = b.y - dip;
+      svg += `<path class="arc-line arc-wrap${liveCls}" d="M${a.x.toFixed(1)},${a.y.toFixed(1)} C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${b.x.toFixed(1)},${b.y.toFixed(1)}"/>`;
+      const tdx = b.x - c2x, tdy = b.y - c2y, tl = Math.hypot(tdx, tdy) || 1;
+      tx = tdx / tl; ty = tdy / tl;
+    } else {
+      svg += `<line class="arc-line${liveCls}" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"/>`;
+    }
+
+    if (!symmetric) {
+      const hl = 7, hw = 3.4;
+      const ex = wrapped ? b.x - tx * r : x2;
+      const ey = wrapped ? b.y - ty * r : y2;
+      const px = -ty, py = tx;
+      const bx = ex - tx * hl, by = ey - ty * hl;
+      svg += `<polygon class="arc-head${liveCls}" points="${ex.toFixed(1)},${ey.toFixed(1)} ${(bx + px * hw).toFixed(1)},${(by + py * hw).toFixed(1)} ${(bx - px * hw).toFixed(1)},${(by - py * hw).toFixed(1)}"/>`;
+    }
+  }
+
+  let html = `<svg class="edge-layer" style="left:${padX}px" width="${width}" height="${height}">${svg}</svg>`;
+  for (let i = 0; i < n; i++) {
+    const isBlue = selectedNodes.has(i);
+    const isOpt = optSet.has(i) && n <= EXACT_LIMIT;
+    const left = padX + pts[i].x - nodeW / 2;
+    const top = 16 + pts[i].y - nodeW / 2;
+    html += `<div class="node-col" style="left:${left.toFixed(1)}px;top:${top.toFixed(1)}px">
+      <div class="node ${sizeClass} ${isBlue ? 'blue' : ''} ${isOpt ? 'optimal' : ''}" onclick="toggleNode(${i})">${i}</div>
+      <div class="prob-label" id="prob-${i}"></div>
+    </div>`;
+  }
+  wrap.innerHTML = html;
+  wrap.style.height = (height + 32) + 'px';
+
+  updateProbs();
+  updateCurMetrics();
+}
+
+// ─── Toggle node ─────────────────────────────────────────────────────────────
+function toggleNode(i) {
+  if (selectedNodes.has(i)) selectedNodes.delete(i);
+  else selectedNodes.add(i);
+  lastResult = null;
+  if (!autoEstimate()) {
+    document.getElementById('ept-result').classList.remove('visible');
+  }
+  renderGraph();
+}
+
+// ─── Update prob labels ───────────────────────────────────────────────────────
+function updateProbs() {
+  const G = curG, n = G.n;
+  for (let v = 0; v < n; v++) {
+    const el = document.getElementById('prob-' + v);
+    if (!el) continue;
+    if (selectedNodes.has(v)) { el.textContent = 'blue'; el.className = 'prob-label'; continue; }
+    const preds = G.inN[v];
+    if (!preds.length) { el.textContent = ''; continue; }
+    const bp = blueInDegree(G, v, selectedNodes);
+    if (bp === 0) { el.textContent = 'p=0'; el.className = 'prob-label p0'; }
+    else {
+      const p = bp / preds.length;
+      el.textContent = 'p=' + p.toFixed(2);
+      el.className = 'prob-label ' + (p === 1 ? 'p1' : 'phalf');
+    }
+  }
+}
+
+// Last computed Find EPT result, keyed by the set it belongs to, so that a
+// re-render (e.g. a window resize) redisplays it instead of blanking the row.
+let lastResult = null;
+function selectionKey() { return [...selectedNodes].sort((a, b) => a - b).join(','); }
+
+// ─── Update current metrics ──────────────────────────────────────────────────
+function updateCurMetrics() {
+  const n = curN;
+  const s = selectedNodes.size;
+  document.getElementById('cur-s').textContent = s;
+
+  if (lastResult && lastResult.key === selectionKey()) {
+    document.getElementById('cur-ept').textContent = lastResult.ept;
+    document.getElementById('cur-th').textContent = lastResult.th;
+    document.getElementById('cur-explain').textContent = lastResult.explain;
+    return;
+  }
+
+  if (!autoEstimate()) {
+    document.getElementById('cur-ept').textContent = '—';
+    document.getElementById('cur-th').textContent = '—';
+    document.getElementById('cur-explain').textContent = s === 0 ? 'select vertices then click Find EPT' : `${s} vertices selected — click Find EPT`;
+    return;
+  }
+
+  if (s === 0) {
+    document.getElementById('cur-ept').textContent = '—';
+    document.getElementById('cur-th').textContent = '—';
+    document.getElementById('cur-explain').textContent = 'select some vertices above';
+    return;
+  }
+  if (s === n) {
+    document.getElementById('cur-ept').textContent = '0';
+    document.getElementById('cur-th').textContent = n;
+    document.getElementById('cur-explain').textContent = 'all vertices blue — EPT = 0 but set size = ' + n;
+    return;
+  }
+
+  document.getElementById('cur-ept').textContent = '...';
+  document.getElementById('cur-th').textContent = '...';
+  document.getElementById('cur-explain').textContent = 'computing...';
+
+  const snap = new Set(selectedNodes);
+  setTimeout(() => {
+    const arr = [...snap];
+    const ept = estimateEPT(arr, curG);
+    const th = arr.length + ept;
+    const best = DATA[n] ? DATA[n].th : Infinity;
+    document.getElementById('cur-ept').textContent = ept.toFixed(2);
+    document.getElementById('cur-th').textContent = th.toFixed(2);
+    const diff = th - best;
+    let msg = '';
+    if (diff < 0.15) msg = 'this is at or near the optimal throttle';
+    else if (diff < 1) msg = `${diff.toFixed(2)} above optimal (th* = ${best.toFixed(2)})`;
+    else msg = `${diff.toFixed(2)} above optimal throttle of ${best.toFixed(2)}`;
+    document.getElementById('cur-explain').textContent = msg;
+  }, 20);
+}
+
+// ─── Find EPT button handler ─────────────────────────────────────────────────
+// Works on every graph family. Order of preference:
+//   1. a known closed form (bidirectional path from an endpoint),
+//   2. infinity, if S cannot reach every vertex (Theorem 2.1),
+//   3. Monte Carlo, reported with its trial count and standard error.
+function handleFindEPT() {
+  const G = curG, n = G.n;
+  const s = selectedNodes.size;
+  if (s === 0) { alert('Please select at least one vertex first.'); return; }
+
+  const arr = [...selectedNodes].sort((a, b) => a - b);
+  const btn = document.getElementById('find-ept-btn');
+  const result = document.getElementById('ept-result');
+
+  if (s === n) { showEPTResult({ mean: 0, se: 0 }, arr, n, 'trivial'); return; }
+
+  const exact = exactEPTIfKnown(arr, G);
+  if (exact !== null) { showEPTResult({ mean: exact, se: 0 }, arr, n, 'exact'); return; }
+
+  if (!allReachable(G, arr)) { showEPTResult({ infinite: true }, arr, n, 'infinite'); return; }
+
+  const TRIALS = 100000;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>simulating...';
+  result.classList.remove('visible');
+
+  setTimeout(() => {
+    const stats = simulateEPTStats(arr, G, TRIALS);
+    btn.disabled = false;
+    btn.textContent = 'Find EPT';
+    showEPTResult(stats, arr, n, 'sim');
+  }, 20);
+}
+
+function showEPTResult(stats, arr, n, mode) {
+  const result = document.getElementById('ept-result');
+  const s = arr.length;
+  const setStr = `{${arr.join(', ')}}`;
+
+  const label = document.getElementById('ept-result-label');
+  const val = document.getElementById('ept-result-val');
+  const interp = document.getElementById('ept-result-interp');
+  const thr = document.getElementById('ept-result-throttle');
+
+  if (stats.infinite) {
+    const unreached = [];
+    const seen = new Uint8Array(n), stack = [...arr];
+    for (const v of arr) seen[v] = 1;
+    while (stack.length) {
+      const u = stack.pop();
+      for (const w of curG.outN[u]) if (!seen[w]) { seen[w] = 1; stack.push(w); }
+    }
+    for (let v = 0; v < n; v++) if (!seen[v]) unreached.push(v);
+
+    label.textContent = 'EPT is infinite';
+    val.textContent = '∞';
+    interp.textContent =
+      `No directed path reaches ${unreached.length === 1 ? 'vertex' : 'vertices'} `
+      + `{${unreached.slice(0, 12).join(', ')}${unreached.length > 12 ? ', …' : ''}} from ${setStr}, `
+      + `so those vertices can never turn blue (Theorem 2.1). S is not a valid throttling set.`;
+    thr.textContent = 'throttle sum: |S| + EPT = ∞';
+    document.getElementById('cur-ept').textContent = '∞';
+    document.getElementById('cur-th').textContent = '∞';
+    document.getElementById('cur-s').textContent = s;
+    document.getElementById('cur-explain').textContent =
+      `${unreached.length} ${unreached.length === 1 ? 'vertex' : 'vertices'} unreachable from S`;
+    lastResult = { key: selectionKey(), ept: '∞', th: '∞',
+                   explain: document.getElementById('cur-explain').textContent };
+    result.classList.add('visible');
+    return;
+  }
+
+  const ept = stats.mean, th = s + ept;
+  const se = stats.se || 0;
+  const pm = se > 0 ? ` ± ${(1.96 * se).toFixed(3)}` : '';
+
+  label.textContent =
+    mode === 'exact' ? 'exact EPT (closed form)'
+    : mode === 'trivial' ? 'EPT = 0 (every vertex already blue)'
+    : `estimated EPT · ${stats.trials.toLocaleString()} trials`;
+
+  val.textContent = ept.toFixed(4);
+  interp.textContent =
+    `Starting from ${setStr}, RZF colours all ${n} vertices in an average of `
+    + `${ept.toFixed(3)}${pm} rounds`
+    + (mode === 'exact' ? ' (exact — no simulation needed).'
+       : mode === 'trivial' ? '.'
+       : ` (95% interval).`);
+  thr.textContent =
+    `throttle sum: |S| + EPT = ${s} + ${ept.toFixed(3)} = ${th.toFixed(3)}`
+    + (stats.capped ? `  ·  warning: ${(100 * stats.capped / stats.trials).toFixed(1)}% of trials hit the ${stats.cap}-round cap, so this is a slight underestimate` : '');
+
+  document.getElementById('cur-ept').textContent = ept.toFixed(2);
+  document.getElementById('cur-th').textContent = th.toFixed(2);
+  document.getElementById('cur-s').textContent = s;
+
+  // Only compare against the precomputed optimum when we are actually on the
+  // graph that table describes (the bidirectional path).
+  const d = isLegacyPath() ? DATA[n] : null;
+  const explain = document.getElementById('cur-explain');
+  if (d) {
+    const diff = th - d.th;
+    explain.textContent = diff < Math.max(0.05, 2 * 1.96 * se)
+      ? `at or near the optimal throttle (th* = ${d.th.toFixed(2)})`
+      : `${diff.toFixed(2)} above optimal (th* = ${d.th.toFixed(2)})`;
+  } else {
+    explain.textContent =
+      `|S| + EPT = ${th.toFixed(3)} — click “Compute exact throttling” above for this family's optimum`;
+  }
+
+  lastResult = { key: selectionKey(), ept: ept.toFixed(2), th: th.toFixed(2),
+                 explain: explain.textContent };
+  result.classList.add('visible');
+}
+
+// ─── Set optimal ─────────────────────────────────────────────────────────────
+function setOptimal() {
+  const d = DATA[curN];
+  if (!d) return;
+  selectedNodes = new Set(d.opt);
+  lastResult = null;
+  document.getElementById('ept-result').classList.remove('visible');
+  renderGraph();
+}
+
+function clearNodes() {
+  selectedNodes = new Set();
+  lastResult = null;
+  document.getElementById('ept-result').classList.remove('visible');
+  renderGraph();
+}
+
+// ─── Render sets (exact mode only) ───────────────────────────────────────────
+function renderSets() {
+  const n = curN;
+  const d = DATA[n];
+  if (!d) { document.getElementById('sets-list').innerHTML = ''; return; }
+
+  const best = d.th;
+  const candidates = [];
+  const optArr = [...d.opt].sort((a, b) => a - b);
+  candidates.push({ label: 'S = {' + optArr.join(', ') + '}', s: d.s, ept: d.ept, th: d.th });
+
+  if (d.s > 1) {
+    const smaller = Array.from({ length: d.s - 1 }, (_, i) => Math.round(i * (n - 1) / Math.max(d.s - 2, 1))).slice(0, d.s - 1);
+    const ept2 = approxEPT(smaller, curG);
+    candidates.push({ label: 'S = {' + smaller.join(', ') + '}', s: smaller.length, ept: ept2, th: smaller.length + ept2 });
+  }
+  const ept0 = estimateEPT([0], curG);
+  candidates.push({ label: 'S = {0}', s: 1, ept: ept0, th: 1 + ept0 });
+  candidates.push({ label: 'S = all vertices', s: n, ept: 0, th: n });
+
+  candidates.sort((a, b) => a.th - b.th);
+
+  let html = '';
+  candidates.slice(0, 6).forEach(({ label, s, ept, th }) => {
+    const isBest = Math.abs(th - best) < 0.15;
+    html += `<div class="set-row ${isBest ? 'best' : ''}">
+      <span class="set-label">${label}</span>
+      <span class="set-sum">${s} + ${ept.toFixed(2)}</span>
+      <span class="set-val">${th.toFixed(2)}</span>
+      ${isBest ? '<span class="badge badge-green">optimal</span>' : ''}
+    </div>`;
+  });
+  document.getElementById('sets-list').innerHTML = html;
+}
+
+// ─── Chart ───────────────────────────────────────────────────────────────────
+function buildChart() {
+  const ns = Object.keys(DATA).map(Number);
+  const ths = ns.map(n => DATA[n].th);
+  const formulas = ns.map(n => Math.floor(n / 2) + 1);
+  const colors = ns.map(n => {
+    const isOdd = n % 2 === 1;
+    const isClean = Math.abs(DATA[n].th - (Math.floor(n / 2) + 1)) < 0.01;
+    if (isOdd) return '#22D3EE';
+    if (isClean) return '#34D399';
+    return '#8B5CF6';
+  });
+
+  const ctx = document.getElementById('chart').getContext('2d');
+  chart = new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [
+        {
+          label: 'th_rzf',
+          data: ns.map((n, i) => ({ x: n, y: ths[i] })),
+          pointBackgroundColor: colors,
+          pointBorderColor: colors,
+          pointRadius: 6,
+          pointHoverRadius: 9,
+          showLine: false
+        },
+        {
+          label: 'formula',
+          data: ns.map((n, i) => ({ x: n, y: formulas[i] })),
+          borderColor: '#FBBF24',
+          borderWidth: 1.5,
+          borderDash: [5, 4],
+          pointRadius: 0,
+          showLine: true,
+          fill: false,
+          tension: 0
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0C1422',
+          borderColor: 'rgba(34,211,238,0.28)',
+          borderWidth: 1,
+          titleColor: '#8FA6BF',
+          bodyColor: '#E4EEF9',
+          padding: 10,
+          titleFont: { family: 'Kode Mono', size: 11 },
+          bodyFont: { family: 'Kode Mono', size: 12 },
+          callbacks: {
+            label: ctx => {
+              if (ctx.datasetIndex === 0) return `n=${ctx.raw.x}: th_rzf = ${ctx.raw.y.toFixed(4)}`;
+              return `formula: ${ctx.raw.y}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'n', color: '#8FA6BF', font: { size: 11, family: 'Kode Mono' } },
+          ticks: { color: '#56697F', font: { family: 'Kode Mono', size: 10 } },
+          grid: { color: 'rgba(148,183,214,0.06)' }
+        },
+        y: {
+          title: { display: true, text: 'throttling number', color: '#8FA6BF', font: { size: 11, family: 'Kode Mono' } },
+          ticks: { color: '#56697F', font: { family: 'Kode Mono', size: 10 } },
+          grid: { color: 'rgba(148,183,214,0.06)' }
+        }
+      }
+    }
+  });
+}
+
+function highlightChart(highlightN) {
+  if (!chart) return;
+  const ns = Object.keys(DATA).map(Number);
+  const sizes = ns.map(n => n === highlightN ? 10 : 6);
+  chart.data.datasets[0].pointRadius = sizes;
+  chart.update();
+}
+
+// ─── Graph families ──────────────────────────────────────────────────────────
+const FAMILIES = {
+  tree: {
+    label: 'Arborescences & Trees', sub: 'orient away from root',
+    def: { base: 'binary', n: 7, root: 0, directed: true },
+    params: [
+      { k: 'base', type: 'seg', label: 'base tree', opts: [['path', 'path'], ['star', 'star'], ['caterpillar', 'caterpillar'], ['binary', 'binary']] },
+      { k: 'n', type: 'range', label: 'vertices', min: 2, max: 30 },
+      { k: 'root', type: 'range', label: 'root', min: 0, max: 29 },
+      { k: 'directed', type: 'seg', label: 'orientation', opts: [['false', 'tree'], ['true', 'arborescence']] }
+    ],
+    build: genTree,
+    title: (p) => (p.directed ? 'Out-arborescence' : 'Tree') + ' (' + p.base + ')' + (p.directed ? ' rooted at ' + Math.min(p.root, p.n - 1) : '')
+  },
+  path: {
+    label: 'Paths', sub: 'P_n',
+    def: { n: 7, directed: false },
+    params: [
+      { k: 'n', type: 'range', label: 'n', min: 2, max: 60 },
+      { k: 'directed', type: 'seg', label: 'orientation', opts: [['false', 'bidirectional'], ['true', 'dipath']] }
+    ],
+    build: genPath,
+    title: (p) => (p.directed ? 'Directed path' : 'Bidirectional path')
+  },
+  cycle: {
+    label: 'Cycles', sub: 'C_n',
+    def: { n: 8, directed: false },
+    params: [
+      { k: 'n', type: 'range', label: 'n', min: 3, max: 40 },
+      { k: 'directed', type: 'seg', label: 'orientation', opts: [['false', 'bidirectional'], ['true', 'dicycle']] }
+    ],
+    build: genCycle,
+    title: (p) => (p.directed ? 'Directed cycle' : 'Bidirectional cycle')
+  },
+  star: {
+    label: 'Stars & Complete', sub: 'K_{1,n} / K_n',
+    def: { kind: 'star', n: 6, directed: false },
+    params: [
+      { k: 'kind', type: 'seg', label: 'kind', opts: [['star', 'K_{1,n}'], ['complete', 'K_n']] },
+      { k: 'n', type: 'range', label: 'n', min: 2, max: 24 },
+      { k: 'directed', type: 'seg', label: 'orientation', opts: [['false', 'undirected'], ['true', 'out-directed']] }
+    ],
+    build: genStarComplete,
+    title: (p) => p.kind === 'complete' ? 'Complete graph K_' + p.n : 'Star K_{1,' + p.n + '}'
+  },
+  bipartite: {
+    label: 'Complete Bipartite', sub: 'K_{m,n}',
+    def: { m: 3, n: 3, directed: false },
+    params: [
+      { k: 'm', type: 'range', label: 'm', min: 1, max: 12 },
+      { k: 'n', type: 'range', label: 'n', min: 1, max: 12 },
+      { k: 'directed', type: 'seg', label: 'orientation', opts: [['false', 'undirected'], ['true', 'm → n']] }
+    ],
+    build: genBipartite,
+    title: (p) => 'Complete bipartite K_{' + p.m + ',' + p.n + '}'
+  },
+  spider: {
+    label: 'Spiders', sub: 'k legs of length L',
+    def: { k: 3, L: 2, directed: false },
+    params: [
+      { k: 'k', type: 'range', label: 'legs k', min: 2, max: 10 },
+      { k: 'L', type: 'range', label: 'leg length', min: 1, max: 8 },
+      { k: 'directed', type: 'seg', label: 'orientation', opts: [['false', 'undirected'], ['true', 'out-directed']] }
+    ],
+    build: genSpider,
+    title: (p) => 'Spider — ' + p.k + ' legs of length ' + p.L
+  }
+};
+
+let curFamily = 'path';
+let curParams = { ...FAMILIES.path.def };
+
+// Bitmask state indexing uses 32-bit ints, so n=30 is a hard structural limit.
+const BITMASK_LIMIT = 30;
+
+// ─── Cost estimation ─────────────────────────────────────────────────────────
+// The DP enumerates 2^(eligible) subsets PER state, so cost is ~2^n only for
+// sparse graphs. On dense families (K_n, K_{m,n}) it approaches 3^n. Estimate
+// from the actual structure by sampling states rather than from n alone.
+let opsPerMs = 69000;   // measured default; refined after each real solve
+
+function estimateOps(G, samples = 1200) {
+  const n = G.n;
+  if (n > BITMASK_LIMIT) return Infinity;
+  const blue = new Uint8Array(n);
+  let sum = 0;
+  for (let t = 0; t < samples; t++) {
+    for (let v = 0; v < n; v++) blue[v] = Math.random() < 0.5 ? 1 : 0;
+    let k = 0;
+    for (let v = 0; v < n; v++) {
+      if (blue[v]) continue;
+      const L = G.inN[v];
+      for (let q = 0; q < L.length; q++) if (blue[L[q]]) { k++; break; }
+    }
+    sum += Math.pow(2, k);
+  }
+  return (sum / samples) * Math.pow(2, n);
+}
+
+function fmtTime(ms) {
+  if (!isFinite(ms)) return 'unbounded';
+  if (ms < 1000) return Math.round(ms) + 'ms';
+  if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
+  if (ms < 3600000) return (ms / 60000).toFixed(1) + ' min';
+  if (ms < 86400000) return (ms / 3600000).toFixed(1) + ' hours';
+  return (ms / 86400000).toFixed(1) + ' days';
+}
+
+function fmtBytes(b) {
+  if (b < 1024 ** 2) return (b / 1024).toFixed(0) + ' KB';
+  if (b < 1024 ** 3) return (b / 1024 ** 2).toFixed(0) + ' MB';
+  return (b / 1024 ** 3).toFixed(2) + ' GB';
+}
+
+// No hard cap on vertices: project the cost, warn, and let the user decide.
+function updateCostWarning() {
+  const G = curG, n = G.n;
+  const el = document.getElementById('cost-warn');
+  const btn = document.getElementById('solve-btn');
+  const mem = Math.pow(2, n) * 8;
+  btn.disabled = false;
+
+  if (n > BITMASK_LIMIT) {
+    el.style.display = 'block';
+    el.className = 'insight insight-error';
+    el.innerHTML = `<strong>Exact solving unavailable above ${BITMASK_LIMIT} vertices.</strong> This graph has ${n}. State indexing uses 32-bit bitmasks, so 2<sup>${n}</sup> states cannot be addressed. Use simulation on the diagram below instead.`;
+    btn.disabled = true;
+    return;
+  }
+
+  const ops = estimateOps(G);
+  const ms = ops / opsPerMs;
+  const heavy = ms > 5000 || mem > 256 * 1024 ** 2;
+
+  if (!heavy) {
+    el.style.display = 'block';
+    el.className = 'insight insight-clean';
+    el.innerHTML = `${n} vertices · 2<sup>${n}</sup> = ${Math.pow(2, n).toLocaleString()} states · est. <strong>${fmtTime(ms)}</strong>, ${fmtBytes(mem)} memory.`;
+  } else {
+    el.style.display = 'block';
+    el.className = 'insight insight-sim';
+    el.innerHTML = `<strong>Heavy run.</strong> ${n} vertices · 2<sup>${n}</sup> = ${Math.pow(2, n).toLocaleString()} states · est. <strong>${fmtTime(ms)}</strong>, ${fmtBytes(mem)} memory.`
+      + (mem > 1024 ** 3 ? ` Allocation this large may fail outright in the browser.` : ``)
+      + ` Estimates are rough and dense graphs cost far more than sparse ones at the same vertex count. You can start it anyway and cancel at any time.`;
+  }
+}
+
+// ─── Exact solver (Web Worker) ───────────────────────────────────────────────
+// Same Markov-chain DP as rzf_throttling.py, ported to JS. Verified against the
+// Python DATA table for n=2..19 before shipping.
+const WORKER_SRC = `
+self.onmessage = function(e) {
+  const n = e.data.n, inN = e.data.inN;
+  const size = Math.pow(2, n);
+  let E;
+  try { E = new Float64Array(size); }
+  catch (err) { self.postMessage({type:'error', message:'Could not allocate ' + size + ' states. Out of memory.'}); return; }
+  E.fill(Infinity);
+  E[size - 1] = 0;
+  const deg = new Array(n);
+  for (let v = 0; v < n; v++) deg[v] = inN[v].length;
+  let last = Date.now();
+  const elig = new Array(n), probs = new Array(n);
+  for (let i = size - 2; i >= 1; i--) {
+    let k = 0;
+    for (let v = 0; v < n; v++) {
+      if (i & (1 << v)) continue;
+      const d = deg[v];
+      if (!d) continue;
+      let bp = 0;
+      const L = inN[v];
+      for (let t = 0; t < L.length; t++) if (i & (1 << L[t])) bp++;
+      if (bp > 0) { elig[k] = v; probs[k] = bp / d; k++; }
+    }
+    if (!k) continue;
+    let selfP = 0, acc = 0;
+    const lim = 1 << k;
+    for (let m = 0; m < lim; m++) {
+      let p = 1, j = i;
+      for (let b = 0; b < k; b++) {
+        if (m & (1 << b)) { p *= probs[b]; j |= (1 << elig[b]); }
+        else p *= (1 - probs[b]);
+      }
+      if (p === 0) continue;
+      if (j === i) selfP += p; else acc += p * E[j];
+    }
+    if (1 - selfP < 1e-15) continue;
+    E[i] = (1 + acc) / (1 - selfP);
+    if ((i & 0x3FFF) === 0 && Date.now() - last > 200) {
+      last = Date.now();
+      self.postMessage({type:'progress', done: size - i, total: size});
+    }
+  }
+  let best = Infinity, bestI = -1;
+  for (let i = 1; i < size; i++) {
+    if (!isFinite(E[i])) continue;
+    let pc = 0;
+    for (let v = 0; v < n; v++) if (i & (1 << v)) pc++;
+    const t = pc + E[i];
+    if (t < best - 1e-10) { best = t; bestI = i; }
+  }
+  if (bestI < 0) { self.postMessage({type:'error', message:'No starting set reaches every vertex (the graph may be disconnected or have unreachable vertices).'}); return; }
+  const S = [];
+  for (let v = 0; v < n; v++) if (bestI & (1 << v)) S.push(v);
+  self.postMessage({type:'done', th: best, s: S.length, ept: E[bestI], opt: S});
+};
+`;
+
+let solveWorker = null;
+let solveStart = 0;
+let solveOps = 0;
+
+function startSolve() {
+  if (solveWorker) return;
+  const G = curG;
+  if (G.n > BITMASK_LIMIT) return;
+
+  solveOps = estimateOps(G);
+  solveStart = Date.now();
+
+  const prog = document.getElementById('solve-progress');
+  const res = document.getElementById('fam-result');
+  document.getElementById('solve-btn').disabled = true;
+  document.getElementById('cancel-btn').style.display = 'inline-block';
+  prog.style.display = 'block';
+  res.classList.remove('visible');
+  document.getElementById('progress-fill').style.width = '0%';
+  document.getElementById('progress-text').textContent = 'starting…';
+
+  try {
+    const blob = new Blob([WORKER_SRC], { type: 'application/javascript' });
+    solveWorker = new Worker(URL.createObjectURL(blob));
+  } catch (err) {
+    finishSolve();
+    showSolveError('Could not start a Web Worker: ' + err.message);
+    return;
+  }
+
+  solveWorker.onmessage = (e) => {
+    const d = e.data;
+    if (d.type === 'progress') {
+      const pct = (d.done / d.total) * 100;
+      document.getElementById('progress-fill').style.width = pct.toFixed(1) + '%';
+      const el = Date.now() - solveStart;
+      const eta = pct > 1 ? fmtTime(el * (100 - pct) / pct) : '…';
+      document.getElementById('progress-text').textContent =
+        `${pct.toFixed(1)}% · ${fmtTime(el)} elapsed · ~${eta} remaining`;
+    } else if (d.type === 'done') {
+      const el = Date.now() - solveStart;
+      if (el > 300 && isFinite(solveOps)) opsPerMs = solveOps / el;   // self-calibrate
+      finishSolve();
+      showSolveResult(d, el);
+    } else if (d.type === 'error') {
+      finishSolve();
+      showSolveError(d.message);
+    }
+  };
+  solveWorker.onerror = (err) => {
+    finishSolve();
+    showSolveError('Solver failed: ' + (err.message || 'unknown error'));
+  };
+  solveWorker.postMessage({ n: G.n, inN: G.inN });
+}
+
+function cancelSolve() {
+  if (!solveWorker) return;
+  solveWorker.terminate();
+  finishSolve();
+  document.getElementById('progress-text').textContent = 'cancelled';
+  document.getElementById('solve-progress').style.display = 'block';
+}
+
+function finishSolve() {
+  if (solveWorker) { solveWorker.terminate(); solveWorker = null; }
+  document.getElementById('solve-btn').disabled = false;
+  document.getElementById('cancel-btn').style.display = 'none';
+  document.getElementById('solve-progress').style.display = 'none';
+}
+
+function showSolveResult(d, elapsedMs) {
+  const res = document.getElementById('fam-result');
+  document.getElementById('fam-result-label').textContent =
+    'exact throttling number · ' + FAMILIES[curFamily].title(curParams);
+  document.getElementById('fam-result-val').textContent = d.th.toFixed(4);
+  document.getElementById('fam-result-interp').textContent =
+    `Optimal starting set S* = {${d.opt.join(', ')}} with |S*| = ${d.s}, giving EPT = ${d.ept.toFixed(4)}.`;
+  document.getElementById('fam-result-detail').textContent =
+    `th_rzf = |S*| + EPT = ${d.s} + ${d.ept.toFixed(4)} = ${d.th.toFixed(4)} · computed exactly in ${fmtTime(elapsedMs)}`;
+  res.classList.add('visible');
+  selectedNodes = new Set(d.opt);
+  renderGraph();
+}
+
+function showSolveError(msg) {
+  const res = document.getElementById('fam-result');
+  document.getElementById('fam-result-label').textContent = 'solver error';
+  document.getElementById('fam-result-val').textContent = '—';
+  document.getElementById('fam-result-interp').textContent = msg;
+  document.getElementById('fam-result-detail').textContent = '';
+  res.classList.add('visible');
+}
+
+// ─── Family panel UI ─────────────────────────────────────────────────────────
+function renderFamilyButtons() {
+  let html = '';
+  for (const [key, f] of Object.entries(FAMILIES)) {
+    html += `<button class="fam-btn ${key === curFamily ? 'active' : ''}" onclick="selectFamily('${key}')">${f.label}<span class="fam-sub">${f.sub}</span></button>`;
+  }
+  document.getElementById('fam-grid').innerHTML = html;
+}
+
+function renderParams() {
+  const f = FAMILIES[curFamily];
+  let html = '';
+  for (const p of f.params) {
+    if (p.type === 'range') {
+      let max = p.max;
+      if (curFamily === 'tree' && p.k === 'root') max = Math.max(0, curParams.n - 1);
+      html += `<div class="param-row">
+        <span class="slider-label">${p.label}</span>
+        <input type="range" min="${p.min}" max="${max}" step="1" value="${Math.min(curParams[p.k], max)}"
+               oninput="setParam('${p.k}', +this.value)">
+        <span class="slider-val">${Math.min(curParams[p.k], max)}</span>
+      </div>`;
+    } else {
+      html += `<div class="param-row"><span class="slider-label">${p.label}</span><span class="seg">`;
+      for (const [val, lbl] of p.opts) {
+        const on = String(curParams[p.k]) === val;
+        html += `<button class="${on ? 'on' : ''}" onclick="setParam('${p.k}', '${val}')">${lbl}</button>`;
+      }
+      html += `</span></div>`;
+    }
+  }
+  document.getElementById('fam-params').innerHTML = html;
+}
+
+function setParam(key, val) {
+  if (val === 'true') val = true;
+  else if (val === 'false') val = false;
+  curParams[key] = val;
+  if (curFamily === 'tree' && key === 'n' && curParams.root > val - 1) curParams.root = Math.max(0, val - 1);
+  rebuildGraph();
+}
+
+function selectFamily(key) {
+  if (solveWorker) cancelSolve();
+  curFamily = key;
+  curParams = { ...FAMILIES[key].def };
+  document.getElementById('fam-result').classList.remove('visible');
+  renderFamilyButtons();
+  rebuildGraph();
+}
+
+function updateFamSummary() {
+  const G = curG;
+  const arcs = arcList(G).length;
+  const sym = arcList(G).filter(([u, v]) => hasArc(G, v, u)).length / 2;
+  const oneWay = arcs - sym * 2;
+  document.getElementById('fam-summary').textContent =
+    `${G.n} vertices · ${arcs} arcs (${sym} symmetric pair${sym === 1 ? '' : 's'}` +
+    (oneWay ? `, ${oneWay} one-way` : '') + `)`;
+
+  // Mirror the live figures into the instrument rail.
+  document.getElementById('rail-n').textContent = G.n;
+  document.getElementById('rail-arcs').textContent = arcs;
+  document.getElementById('rail-states').textContent =
+    G.n <= 30 ? Math.pow(2, G.n).toLocaleString() : '2^' + G.n;
+}
+
+// ─── Rebuild the active graph ────────────────────────────────────────────────
+function rebuildGraph() {
+  const f = FAMILIES[curFamily];
+  curG = f.build(curParams);
+  curN = curG.n;
+  selectedNodes = new Set();
+  lastResult = null;
+
+  // The precomputed DATA table, parity insight and chart are specific to the
+  // bidirectional path, so they only apply to that exact configuration.
+  const legacyPath = curFamily === 'path' && !curParams.directed && DATA[curG.n];
+  document.getElementById('path-config-card').style.display = legacyPath ? 'block' : 'none';
+  document.getElementById('chart-card').style.display = legacyPath ? 'block' : 'none';
+  if (!legacyPath) document.getElementById('sets-card').style.display = 'none';
+
+  document.getElementById('diagram-title').textContent =
+    f.title(curParams) + ' — click vertices to toggle blue';
+
+  renderParams();
+  updateFamSummary();
+
+  if (legacyPath) {
+    document.getElementById('n-slider').value = curG.n;
+    updatePathAnalysis(curG.n);
+  } else {
+    document.getElementById('show-opt-btn').style.display = 'none';
+    document.getElementById('find-ept-btn').style.display = 'inline-block';
+    document.getElementById('ept-result').classList.remove('visible');
+  }
+
+  renderGraph();
+  updateCostWarning();
+}
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+// The wrapped layout depends on container width, so reflow on resize.
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (curG) renderGraph(); }, 120);
+});
+
+buildChart();
+renderFamilyButtons();
+rebuildGraph();
+</script>
+</body>
+</html>

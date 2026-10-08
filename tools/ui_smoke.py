@@ -7,6 +7,7 @@ directory. Run through the repo's server helper:
     python3 tools/ui_smoke.py                      # starts its own server
     BASE=http://localhost:8000/web/ python3 tools/ui_smoke.py
 """
+import json
 import os
 import re
 import subprocess
@@ -174,9 +175,33 @@ def main():
             "don't recover" in page.inner_text("#panel"),
         )
 
-        body = page.inner_text("body")
-        for word in ["expected propagation", "vertex", "vertices", " arc "]:
-            check(f'jargon "{word.strip()}" stays out of the main screens', word not in body.lower())
+        # §5 allows the research vocabulary in exactly one place: the Advanced
+        # panel. So the check is scoped to everything except that panel.
+        main_text = page.evaluate(
+            """() => { const c = document.getElementById('panel').cloneNode(true);
+                       c.querySelectorAll('.advanced').forEach(e => e.remove());
+                       return c.textContent.toLowerCase(); }"""
+        )
+        for word in ["expected propagation", "ept", "vertex", "vertices", "arc"]:
+            check(f'jargon "{word}" stays out of the main screens', word not in main_text)
+
+        check(
+            "the advanced panel exists and is collapsed by default",
+            page.locator(".advanced").count() == 1
+            and not page.locator(".advanced").first.get_attribute("open"),
+        )
+        page.locator(".advanced summary").click()
+        page.wait_for_timeout(600)
+        adv = page.inner_text(".advanced")
+        check("advanced shows the raw expected propagation time", "ept_rzf" in adv.lower())
+        check("advanced shows the throttling number", "throttling" in adv.lower())
+        page.wait_for_function(
+            "() => !document.querySelector('.advanced .throttle').textContent.includes('computing')",
+            timeout=30000,
+        )
+        thr = page.inner_text(".advanced .throttle")
+        check("the optimal watch set is reported", "S*" in thr or "s*" in thr.lower(), thr.split("\n")[0])
+        check("advanced labels exact vs estimated", page.locator(".advanced .badge").count() >= 2)
 
         seeds = page.locator('#map .plate.is-seed').count()
         check("the scenario is marked on the map", seeds >= 1, f"{seeds} marked")
@@ -240,6 +265,97 @@ def main():
         page.wait_for_timeout(900)
         check("run another works", page.locator(".replay-log li").count() >= 2)
         page.screenshot(path="/tmp/cascade-replay.png", full_page=True)
+
+        print("\n── export and import ─────────────────────────────────────")
+        with page.expect_download() as dl_info:
+            page.click("#btn-export")
+        download = dl_info.value
+        export_path = "/tmp/cascade-export.json"
+        download.save_as(export_path)
+        with open(export_path) as fh:
+            exported = json.load(fh)
+        check(
+            "export writes the whole chain as JSON",
+            len(exported["nodes"]) >= 2 and len(exported["links"]) >= 1,
+            f"{len(exported['nodes'])} companies, {len(exported['links'])} dependencies",
+        )
+
+        page.on("dialog", lambda d: d.accept())
+        page.click("#btn-reset")
+        page.wait_for_timeout(700)
+        check("start over empties the chain", page.locator("#map [data-node]").count() == 1)
+
+        page.set_input_files("#import-file", export_path)
+        page.wait_for_timeout(900)
+        check(
+            "import restores it",
+            page.locator("#map [data-node]").count() == len(exported["nodes"]),
+            f"{page.locator('#map [data-node]').count()} companies back",
+        )
+
+        bad = "/tmp/cascade-bad.json"
+        with open(bad, "w") as fh:
+            fh.write('{"nodes": "not a list"}')
+        page.set_input_files("#import-file", bad)
+        page.wait_for_timeout(600)
+        check(
+            "a malformed file is refused with a message, not a crash",
+            page.locator(".utility-flash.is-bad").count() == 1,
+            page.inner_text(".utility-flash"),
+        )
+
+        print("\n── offline (§8) ──────────────────────────────────────────")
+        requests.clear()
+        page.context.set_offline(True)
+        # Importing drops back to the editing steps, so walk to the results again
+        # — entirely offline, which is the point of the check.
+        page.click('.rail button:has-text("RESULTS")')
+        page.wait_for_selector(".picker", timeout=30000)
+        page.locator(".pick").first.click()
+        page.wait_for_selector(".result-figure", timeout=30000)
+        page.click('button[role="tab"]:has-text("Weakest links")')
+        page.wait_for_selector(".link-list li", timeout=30000)
+        check(
+            "the whole app still works with the network off",
+            page.locator(".link-list li").count() >= 1,
+        )
+        check("no network request was made after load", not requests, "; ".join(requests[:3]))
+        page.context.set_offline(False)
+
+        print("\n── performance (§8) ──────────────────────────────────────")
+        # "The exact solve for a 20-node chain finishes in under 1 second in the
+        # browser." Measured in the page, through the same wrapper the app uses.
+        timing = page.evaluate(
+            """async () => {
+                const { loadEngine } = await import('./engine.js');
+                const engine = await loadEngine();
+                const n = 20, arcs = [];
+                for (let i = 0; i + 1 < n; i++) {
+                  arcs.push({from: i, to: i + 1, weight: 1});
+                  arcs.push({from: i + 1, to: i, weight: 1});
+                }
+                const g = engine.fromArcs(n, arcs);
+                const t0 = performance.now();
+                g.solveExact(-1, 24);
+                const ept = performance.now() - t0;
+                const t1 = performance.now();
+                g.hitTime(n - 1, [0]);
+                const hit = performance.now() - t1;
+                const th = g.throttle().value;
+                g.free();
+                return { ept, hit, th };
+            }"""
+        )
+        check(
+            "a 20-node chain solves exactly in under a second",
+            timing["ept"] < 1000,
+            f"full table {timing['ept']:.0f} ms, hitting-time table {timing['hit']:.0f} ms",
+        )
+        check(
+            "and gets the published answer",
+            abs(timing["th"] - 9.384933539) < 1e-6,
+            f"th_rzf(P_20) = {timing['th']:.6f}",
+        )
 
         print("\n── persistence ───────────────────────────────────────────")
         page.reload()

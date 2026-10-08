@@ -165,6 +165,42 @@ void checkPlanTable() {
   }
 }
 
+// ── Beyond the published tables ─────────────────────────────────────────────
+//
+// The CSVs stop at n = 14 and the plan's table at n = 19, because that is where
+// the original Python solver ran out of road. These values are new, and each was
+// confirmed independently by the research repo's segment-decomposition solver,
+// which shares no code with this engine:
+//
+//   cd throttling && python3 -c "from throttle_fast import th_path, th_cycle; \
+//       print(th_path(22)[0], th_cycle(20)[0])"
+//
+// Agreement there is worth more than agreement with another 2^n DP would be: the
+// two methods are different mathematics, not two implementations of one.
+
+void checkBeyondPublished() {
+  const struct { const char* fam; int n; double th; int sstar; } want[] = {
+      {"path", 20, 9.384934, 4},  {"path", 21, 9.663718, 5},  {"path", 22, 9.989669, 5},
+      {"cycle", 15, 7.918687, 4}, {"cycle", 16, 8.117136, 4}, {"cycle", 17, 8.567163, 4},
+      {"cycle", 18, 8.894776, 4}, {"cycle", 19, 9.147429, 5}, {"cycle", 20, 9.304482, 5},
+  };
+  for (const auto& w : want) {
+    rzf::Graph g(0);
+    std::string error;
+    if (!rzf::families::parse(std::string(w.fam) + ":" + std::to_string(w.n), g, error)) {
+      report(w.fam, false, error);
+      continue;
+    }
+    const rzf::ThrottleResult got = throttleOf(g);
+    const double diff = std::fabs(got.value - w.th);
+    report(std::string(w.fam == std::string("path") ? "P_" : "C_") + std::to_string(w.n) +
+               " vs the segment solver",
+           diff < 1e-6 && got.bestSize == w.sstar,
+           fmt("%.6f", got.value) + " vs " + fmt("%.6f", w.th) + fmt(" (Δ%.1e)", diff) +
+               " · |S*| " + std::to_string(got.bestSize));
+  }
+}
+
 // ── §6.3: ept(P_n, endpoint) = 2n − 3 ───────────────────────────────────────
 
 void checkEndpointClosedForm() {
@@ -620,6 +656,9 @@ int main(int argc, char** argv) {
 
   section("§6.2 cycles: th_rzf(C_n) vs rzf_throttling_cycles.csv");
   checkCsv(dataDir + "/rzf_throttling_cycles.csv", "cycle", "C_n");
+
+  section("beyond the published tables, vs throttle_fast.py");
+  checkBeyondPublished();
 
   section("§6.3 closed form: ept(P_n, endpoint) = 2n − 3");
   checkEndpointClosedForm();

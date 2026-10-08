@@ -30,7 +30,7 @@ OBJS     := $(patsubst $(ENGINE)/%.cpp,$(BUILD)/%.o,$(SRCS))
 
 BINS     := $(BUILD)/rzf_cli $(BUILD)/rzf_verify $(BUILD)/rzf_parity
 
-.PHONY: all test verify bench clean wasm parity jstest
+.PHONY: all test verify bench clean wasm parity jstest serve ui
 all: $(BINS)
 
 # Everything that has to pass before any UI work ships (§6).
@@ -72,6 +72,15 @@ bench: $(BUILD)/rzf_cli
 
 wasm:
 	@bash tools/build_wasm.sh
+
+# The app needs http: module workers and fetch do not work from file://.
+serve:
+	@echo "open http://localhost:8000/web/"
+	@python3 -m http.server 8000
+
+# The guided app, driven in a real browser.
+ui: web/rzf_engine.wasm
+	python3 tools/ui_smoke.py
 
 clean:
 	rm -rf $(BUILD)

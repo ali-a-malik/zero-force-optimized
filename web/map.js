@@ -197,8 +197,25 @@ export function renderMap(svg, model, opts = {}) {
 
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
   svg.setAttribute('data-mode', mode);
-  svg.style.setProperty('--map-aspect', `${width} / ${height}`);
+  // Let a wide chain scroll inside its frame rather than shrink the labels into
+  // illegibility; narrow ones still fit the column.
+  svg.style.minWidth = `${Math.min(width, 760)}px`;
+
+  const frame = svg.parentElement;
+  const prevScroll = frame ? frame.scrollLeft : 0;
+  const wasOverflowing = frame ? frame.scrollWidth > frame.clientWidth + 1 : false;
+
   svg.innerHTML = parts.join('\n');
+
+  if (frame) {
+    requestAnimationFrame(() => {
+      if (frame.scrollWidth <= frame.clientWidth + 1) return;
+      // The first time the chain outgrows its frame, show the right-hand end:
+      // that is where you sit, and where the cascade arrives. After that, leave
+      // the reader's scroll position alone.
+      frame.scrollLeft = wasOverflowing ? prevScroll : frame.scrollWidth;
+    });
+  }
   return { width, height };
 }
 

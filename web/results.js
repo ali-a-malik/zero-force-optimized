@@ -89,6 +89,10 @@ export function renderResults(root, ctx) {
     treated as interchangeable.
   </p>`));
 
+  if (state.scenario.size > 0 && state.analysis && !state.analysis.error) {
+    root.append(advancedPanel(ctx));
+  }
+
   const bar = h('<div class="actions"></div>');
   const back = h('<button type="button" class="btn btn-ghost">← Locations</button>');
   back.addEventListener('click', ctx.onBack);
@@ -611,4 +615,86 @@ function tabReplay(ctx) {
   if (state.replay) show(state.replay);
   else play();
   return wrap;
+}
+
+// ── advanced panel ──────────────────────────────────────────────────────────
+//
+// Collapsed by default, and the only place the research vocabulary is allowed.
+// Its job is to let someone who knows the model check the app against the
+// paper: the raw expected propagation time, the throttling number, the optimal
+// starting set, and an honest statement of which figures were solved and which
+// were sampled.
+
+function advancedPanel(ctx) {
+  const { state } = ctx;
+  const a = state.analysis;
+  const names = (indices) =>
+    indices.map((i) => state.model.nodes[i]?.name || `#${i}`).join(', ') || '—';
+
+  const panel = h(`<details class="advanced">
+    <summary>Advanced — the numbers underneath</summary>
+    <div class="advanced-body">
+      <dl class="kv">
+        <dt>ept_rzf(G, S)</dt>
+        <dd>${
+          a.ept.value === Infinity
+            ? 'infinite — S cannot colour the whole graph'
+            : `${a.ept.value.toFixed(6)} rounds ${badge(a.ept.exact)}${
+                a.ept.exact ? '' : ` <span class="pm">± ${(1.96 * a.ept.se).toFixed(4)} (95% CI)</span>`
+              }`
+        }</dd>
+
+        <dt>hitting time of the target</dt>
+        <dd>${
+          a.hitTime.value === Infinity
+            ? 'infinite — the target is not reachable from S'
+            : `${a.hitTime.value.toFixed(6)} rounds ${badge(a.hitTime.exact)}${
+                a.hitTime.exact ? '' : ` <span class="pm">± ${(1.96 * a.hitTime.se).toFixed(4)} (95% CI)</span>`
+              }`
+        }</dd>
+
+        <dt>initial blue set S</dt>
+        <dd class="mono">{ ${esc(names(a.scenario))} }</dd>
+
+        <dt>closure(S)</dt>
+        <dd class="mono">${a.reachable.length} of ${state.model.nodes.length} vertices reachable
+          along directed arcs${a.unreachable.length ? ` · unreachable: ${esc(names(a.unreachable))}` : ''}</dd>
+
+        <dt>Monte Carlo</dt>
+        <dd class="mono">${a.trials.toLocaleString()} trials · round cap ${a.roundCap} ·
+          ${a.capped} capped · ${a.fastPath ? 'bit-sliced path kernel' : 'general kernel'}</dd>
+
+        <dt>throttling th_rzf(G)</dt>
+        <dd class="throttle">computing…</dd>
+      </dl>
+      <p class="note">Randomized zero forcing: each round a white vertex turns
+        blue with probability equal to the share of its in-arc weight that is
+        already blue. th_rzf(G) = min over nonempty S of |S| + ept_rzf(G, S) —
+        the smallest set worth watching, traded against how long the cascade
+        then takes.</p>
+    </div>
+  </details>`);
+
+  const slot = panel.querySelector('.throttle');
+  panel.addEventListener(
+    'toggle',
+    () => {
+      if (!panel.open || slot.dataset.done) return;
+      slot.dataset.done = '1';
+      ctx
+        .requestThrottle()
+        .then((r) => {
+          slot.innerHTML = r.available
+            ? `${r.value.toFixed(6)} = |S*| ${r.size} + ept ${r.ept.toFixed(6)} ${badge(true)}` +
+              `<br><span class="mono">optimal S* = { ${esc(names(r.set))} }</span>`
+            : esc(r.reason);
+        })
+        .catch((err) => {
+          slot.textContent = err.message;
+        });
+    },
+    { once: false },
+  );
+
+  return panel;
 }

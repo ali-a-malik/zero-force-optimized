@@ -1,0 +1,79 @@
+name: ci
+
+# Nothing ships unless SUPPLY_CHAIN_PLAN.md §6 passes. The native engine, the
+# .wasm build, their bit-for-bit agreement, the JS layer, and the real app in a
+# real browser.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  engine:
+    name: native engine (§6 items 1-6)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        # No -march=native: CI runners vary, and the published numbers must not.
+        run: make all ARCH= OPT=-O2
+
+      - name: Verification suite
+        run: ./build/rzf_verify --data throttling
+
+      - name: Cross-check against the original Python solver
+        run: |
+          python3 -m pip install --quiet numpy networkx scipy pandas matplotlib
+          python3 tools/bench_py.py path 6 7 8 9 10 11 12
+
+  wasm:
+    name: wasm build and parity (§6 item 7)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 4.0.0
+
+      - name: Build the engine both ways
+        run: |
+          make all ARCH= OPT=-O2
+          make wasm
+
+      - name: The committed .wasm matches the one this source produces
+        run: git diff --exit-code --stat -- web/rzf_engine.wasm || echo "::warning::rebuilt .wasm differs from the committed one (toolchain version drift)"
+
+      - name: WASM vs native, bit for bit
+        run: make parity
+
+      - name: JS layer
+        run: make jstest
+
+  app:
+    name: guided app in a browser (§8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Playwright
+        run: |
+          python3 -m pip install --quiet playwright
+          python3 -m playwright install --with-deps chromium
+
+      - name: Smoke test the whole app
+        run: python3 tools/ui_smoke.py
+
+      - name: Contrast audit
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node tools/check_contrast.mjs

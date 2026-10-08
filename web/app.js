@@ -80,6 +80,7 @@ async function boot() {
   el('boot').hidden = true;
   el('shell').hidden = false;
   attachMapHandlers(el('map'), { onNodeActivate: onMapNode });
+  wireUtilityBar();
   await pushModel();
   render();
 }
@@ -113,6 +114,85 @@ async function pushModel() {
   state.analysis = null;
   state.replay = null;
   setMeta();
+}
+
+// ── export / import ─────────────────────────────────────────────────────────
+//
+// There is no server, so a file is the only way to keep or share a chain. Both
+// directions go through model.js: export writes the same shape the app holds,
+// import runs it back through reviveModel, which re-keys and re-validates every
+// field. A hand-edited or stale file therefore cannot put the app into a state
+// its own code could not have produced.
+
+function wireUtilityBar() {
+  el('btn-export').addEventListener('click', exportModel);
+  el('btn-import').addEventListener('click', () => el('import-file').click());
+  el('import-file').addEventListener('change', importModel);
+  el('btn-reset').addEventListener('click', async () => {
+    if (!window.confirm('Clear this supply chain and start again?')) return;
+    M.clearDraft();
+    state.model = M.modelFromTemplate(byId('scratch'));
+    state.scenario.clear();
+    state.analysis = null;
+    state.selectedId = null;
+    state.step = 'business';
+    state.resultsTab = 'scenario';
+    await pushModel();
+    render();
+  });
+}
+
+function exportModel() {
+  const name = (state.model.nodes[0].name || 'supply-chain')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') || 'supply-chain';
+  const blob = new Blob([JSON.stringify(state.model, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${name}.json`;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  flash('Saved to your downloads.');
+}
+
+async function importModel(event) {
+  const file = event.target.files?.[0];
+  event.target.value = '';                 // so the same file can be picked twice
+  if (!file) return;
+  try {
+    const model = M.reviveModel(JSON.parse(await file.text()));
+    if (!model) throw new Error('that file has no companies in it');
+    if (model.nodes.length > MAX_NODES) {
+      throw new Error(`that file has ${model.nodes.length} companies; the limit is ${MAX_NODES}`);
+    }
+    state.model = model;
+    state.scenario.clear();
+    state.analysis = null;
+    state.selectedId = null;
+    state.step = 'suppliers';
+    state.resultsTab = 'scenario';
+    await pushModel();
+    render();
+    flash(`Loaded ${model.nodes.length} companies.`);
+  } catch (err) {
+    flash(`Could not read that file: ${err.message}`, true);
+  }
+}
+
+let flashTimer = null;
+function flash(message, bad = false) {
+  const bar = el('utility-flash');
+  bar.textContent = message;
+  bar.classList.toggle('is-bad', bad);
+  bar.hidden = false;
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => {
+    bar.hidden = true;
+  }, 5000);
 }
 
 // ── render ──────────────────────────────────────────────────────────────────
@@ -344,6 +424,7 @@ function stepBusiness() {
       state.model = M.modelFromTemplate(t);
       state.scenario.clear();
       state.selectedId = null;
+      state.resultsTab = 'scenario';
       await pushModel();
       render();
     });
@@ -593,16 +674,25 @@ async function runAnalysis() {
   }
 }
 
+/** Every engine call writes to the progress readout, so every one restores it. */
+async function withMeta(promise) {
+  try {
+    return await promise;
+  } finally {
+    setMeta();
+  }
+}
+
 async function requestWeakest() {
-  return state.backend.call('weakestLinks', {});
+  return withMeta(state.backend.call('weakestLinks', {}));
 }
 
 async function requestThrottle() {
-  return state.backend.call('throttle', {});
+  return withMeta(state.backend.call('throttle', {}));
 }
 
 async function requestWhatIf(edits) {
-  return state.backend.call('whatIf', { scenario: scenarioIndices(), edits });
+  return withMeta(state.backend.call('whatIf', { scenario: scenarioIndices(), edits }));
 }
 
 /** Commit a what-if edit that the user liked into the real model. */
@@ -614,10 +704,10 @@ async function applyModelChange() {
 }
 
 async function requestReplay() {
-  const result = await state.backend.call('replay', {
+  const result = await withMeta(state.backend.call('replay', {
     scenario: scenarioIndices(),
     seed: (Math.random() * 2 ** 31) | 0,
-  });
+  }));
   const byId = new Map();
   result.week.forEach((w, i) => {
     const id = state.model.nodes[i]?.id;

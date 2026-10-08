@@ -38,6 +38,14 @@
   </section>
 
   <aside class="aside">
+    <div class="utility">
+      <button type="button" class="btn btn-sm btn-ghost" id="btn-export">Export JSON</button>
+      <button type="button" class="btn btn-sm btn-ghost" id="btn-import">Import JSON</button>
+      <input type="file" id="import-file" accept="application/json,.json" hidden>
+      <button type="button" class="btn btn-sm btn-ghost" id="btn-reset">Start over</button>
+      <span class="privacy">Nothing leaves this browser. There is no server.</span>
+    </div>
+    <p class="utility-flash" id="utility-flash" role="status" hidden></p>
     <div class="map-head">
       <h2>Your supply chain</h2>
       <span class="hint" id="map-hint">Click a company to edit it</span>

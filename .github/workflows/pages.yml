@@ -1,0 +1,62 @@
+name: pages
+
+# Publishes web/ to GitHub Pages. The app is static files only — the .wasm is
+# rebuilt here rather than trusted from the commit, so what is served always
+# matches the C++ in the same tree.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 4.0.0
+
+      - name: Build the engine to wasm
+        run: make wasm
+
+      - name: Check the parity suite before publishing
+        run: |
+          make all ARCH= OPT=-O2
+          make parity
+          make jstest
+
+      - name: Stage the site
+        run: |
+          mkdir -p _site
+          cp -R web/. _site/
+          # The app is served at the repository root on Pages.
+          test -f _site/index.html
+          test -f _site/rzf_engine.wasm
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

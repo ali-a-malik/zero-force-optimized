@@ -14,6 +14,7 @@ option(RZF_OPENMP "Parallelise the exact DP over popcount layers when available"
 add_library(rzf_core STATIC
   engine/rzf_core.cpp
   engine/rzf_families.cpp
+  engine/rzf_mc.cpp
 )
 target_include_directories(rzf_core PUBLIC engine)
 target_compile_options(rzf_core PRIVATE -Wall -Wextra)

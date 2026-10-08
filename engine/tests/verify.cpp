@@ -328,6 +328,281 @@ void checkVisitOrders() {
   }
 }
 
+// ── §6.5: Monte Carlo against the exact table ───────────────────────────────
+//
+// Random small weighted digraphs, weights drawn from the reliance scale the UI
+// offers (a little = 1, some = 2, a lot = 4, everything = 8). The seed is fixed,
+// so a 3-SE bound is a deterministic pass/fail rather than a 0.3%-per-case coin
+// flip in CI.
+
+rzf::Graph randomWeighted(int n, double density, rzf::Rng& rng) {
+  static const double scale[] = {1.0, 2.0, 4.0, 8.0};
+  rzf::Graph g(n);
+  for (int u = 0; u < n; ++u) {
+    for (int v = 0; v < n; ++v) {
+      if (u == v) continue;
+      if (rng.nextDouble() < density) {
+        g.addArc(u, v, scale[rng.next() & 3]);
+      }
+    }
+  }
+  g.finalize();
+  return g;
+}
+
+void checkMonteCarloVsExact() {
+  rzf::Rng rng(20261008ull);
+  rzf::SimOptions sim;
+  sim.trials = 120000;
+  sim.weeks = 40;
+
+  int done = 0, attempts = 0;
+  while (done < 12 && attempts < 20000) {
+    ++attempts;
+    const int n = 6 + static_cast<int>(rng.next() % 5);     // 6..10
+    const double density = 0.12 + 0.18 * rng.nextDouble();
+    rzf::Graph g = randomWeighted(n, density, rng);
+    // A small scenario set, so the cascade actually has several rounds to run
+    // and the sampled mean has variance worth testing.
+    uint64_t S = 0;
+    const int want = 1 + static_cast<int>(rng.next() % 3);
+    while (__builtin_popcountll(S) < want) S |= 1ull << (rng.next() % n);
+    if (g.closure(S) != g.fullMask()) continue;             // keep ept finite
+
+    bool ok = false;
+    const double exact = eptOf(g, S, &ok);
+    if (!ok || exact < 2.5) continue;                       // skip the trivial ones
+    ++done;
+
+    sim.seed = 0xC0FFEEull + done;
+    const rzf::SimResult mc = rzf::simulate(g, S, sim);
+    const double gap = std::fabs(mc.meanEpt - exact);
+    // A deterministic case has SE = 0 and must match exactly; everything else
+    // has to land inside 3 SE.
+    const bool within = gap <= 3.0 * mc.seEpt + 1e-12;
+    char detail[200];
+    std::snprintf(detail, sizeof(detail),
+                  "n=%d |S|=%d exact %.4f · mc %.4f ± %.4f (3SE) · gap %.4f%s", n,
+                  __builtin_popcountll(S), exact, mc.meanEpt, 3.0 * mc.seEpt, gap,
+                  mc.capped ? " · CAPPED" : "");
+    report("mc within 3 SE of exact #" + std::to_string(done),
+           within && mc.capped == 0, detail);
+  }
+  report("collected 12 nondegenerate random weighted cases", done == 12,
+         std::to_string(done) + " cases from " + std::to_string(attempts) + " draws");
+}
+
+// The app's headline number is a per-node hitting time read off the Monte Carlo
+// curves, so those have to agree with the exact hitting-time DP too — not just
+// the aggregate ept.
+void checkMonteCarloHitTimes() {
+  struct Case { const char* spec; const char* set; };
+  const Case cases[] = {
+      {"path:12", "0,6"}, {"cycle:11", "0"}, {"spider:3,3", "0"}, {"bintree:15", "7"},
+  };
+  rzf::SimOptions sim;
+  sim.trials = 150000;
+  sim.weeks = 60;
+  sim.seed = 99991;
+
+  for (const Case& c : cases) {
+    rzf::Graph g(0);
+    std::string error;
+    if (!rzf::families::parse(c.spec, g, error)) {
+      report(c.spec, false, error);
+      continue;
+    }
+    uint64_t S = 0;
+    for (const char* p = c.set; *p; ++p) {
+      if (*p >= '0' && *p <= '9') {
+        int v = 0;
+        while (*p >= '0' && *p <= '9') v = v * 10 + (*p++ - '0');
+        S |= 1ull << v;
+        if (!*p) break;
+      }
+    }
+    const rzf::SimResult mc = rzf::simulate(g, S, sim);
+    double worst = 0.0;
+    int worstV = 0, compared = 0;
+    for (int v = 0; v < g.n(); ++v) {
+      if (mc.hitCount[v] != mc.trials) continue;   // keep the estimate unconditional
+      const double exact = rzf::hitTime(g, v, S, 1ull << 27);
+      if (exact == rzf::kInf) continue;
+      ++compared;
+      const double z = mc.hitSe[v] > 0 ? std::fabs(mc.hitMean[v] - exact) / mc.hitSe[v]
+                                       : std::fabs(mc.hitMean[v] - exact) * 1e12;
+      if (z > worst) { worst = z; worstV = v; }
+    }
+    report(std::string("mc hit times within 3 SE · ") + c.spec + " S=" + c.set,
+           compared > 0 && worst <= 3.0,
+           fmt("worst %.2f SE", worst) + " at vertex " + std::to_string(worstV) + " · " +
+               std::to_string(compared) + " nodes compared");
+  }
+}
+
+// The bit-sliced path kernel and the general kernel are different code reading
+// the same model, so they must agree with each other and with the exact value.
+void checkFastPath() {
+  for (int n : {2, 5, 9, 14, 20}) {
+    rzf::Graph g = rzf::families::path(n);
+    const uint64_t S = 1ull;
+    rzf::SimOptions a;
+    a.trials = 200000;
+    a.seed = 777;
+    a.useFastPath = true;
+    rzf::SimOptions b = a;
+    b.useFastPath = false;
+    const rzf::SimResult fa = rzf::simulate(g, S, a);
+    const rzf::SimResult fb = rzf::simulate(g, S, b);
+    const double exact = 2.0 * n - 3.0;
+    const double se = std::sqrt(fa.seEpt * fa.seEpt + fb.seEpt * fb.seEpt);
+    const bool agree = fa.usedFastPath && !fb.usedFastPath &&
+                       std::fabs(fa.meanEpt - fb.meanEpt) <= 3.0 * se &&
+                       std::fabs(fa.meanEpt - exact) <= 3.0 * fa.seEpt;
+    report("bit-sliced == general == 2n−3 on P_" + std::to_string(n), agree,
+           fmt("fast %.4f", fa.meanEpt) + fmt(" · general %.4f", fb.meanEpt) +
+               fmt(" · exact %.1f", exact));
+  }
+}
+
+// ── §6.6: infinite cases ────────────────────────────────────────────────────
+
+// Two disjoint pieces plus an isolated vertex: no single component can ever
+// colour the others.
+rzf::Graph brokenGraph() {
+  rzf::Graph g(9);
+  g.addEdge(0, 1);
+  g.addEdge(1, 2);          // component {0,1,2}
+  g.addEdge(4, 5);
+  g.addEdge(5, 6);
+  g.addEdge(6, 7);          // component {4,5,6,7}
+  // 3 and 8 are isolated.
+  g.finalize();
+  return g;
+}
+
+// The invariant behind §6 item 6, checked over every one of the 2^n states:
+// E[S] is finite exactly when the cascade can reach what it is waiting for.
+void checkInfiniteExhaustive() {
+  struct Case { rzf::Graph g; const char* name; int target; };
+  std::vector<Case> cases;
+  cases.push_back({brokenGraph(), "disconnected + isolated (ept)", -1});
+  cases.push_back({brokenGraph(), "disconnected + isolated (hit 6)", 6});
+  cases.push_back({rzf::families::path(10, true), "directed P_10 (ept)", -1});
+  cases.push_back({rzf::families::path(10, true), "directed P_10 (hit 0)", 0});
+  cases.push_back({rzf::families::bintree(15, true), "arborescence 15 (hit 9)", 9});
+  cases.push_back({rzf::families::path(10), "bidirectional P_10 (ept)", -1});
+
+  for (Case& c : cases) {
+    rzf::ExactOptions opt;
+    opt.target = c.target;
+    opt.maxStates = 1ull << 27;
+    rzf::ExactTable t;
+    if (rzf::solveExact(c.g, opt, t) != rzf::Status::Ok) {
+      report(c.name, false, "solver failed");
+      continue;
+    }
+    const uint64_t full = c.g.fullMask();
+    size_t wrong = 0, infinites = 0;
+    for (uint64_t S = 0; S <= full; ++S) {
+      const uint64_t reach = c.g.closure(S);
+      const bool shouldBeFinite =
+          c.target < 0 ? (reach == full) : (((reach >> c.target) & 1) != 0);
+      const bool isFinite = t.at(S) < rzf::kInf;
+      if (isFinite != shouldBeFinite) ++wrong;
+      if (!isFinite) ++infinites;
+    }
+    report(std::string("∞ ⟺ unreachable · ") + c.name, wrong == 0,
+           std::to_string(wrong) + " mismatches over " + std::to_string(full + 1) +
+               " states (" + std::to_string(infinites) + " infinite)");
+  }
+}
+
+void checkInfiniteMonteCarlo() {
+  rzf::Graph g = rzf::families::path(8, true);   // 0→1→…→7
+  const uint64_t S = 1ull << 3;
+  rzf::SimOptions sim;
+  sim.trials = 4000;
+  sim.weeks = 12;
+  sim.seed = 31337;
+  const rzf::SimResult mc = rzf::simulate(g, S, sim);
+
+  report("mc reports ept = ∞ when the cascade cannot finish",
+         mc.infinite && mc.meanEpt == rzf::kInf,
+         mc.infinite ? "infinite flag set, meanEpt = ∞" : "reported a finite mean");
+
+  bool upstreamNever = true, downstreamAlways = true;
+  for (int v = 0; v < 3; ++v) {
+    if (mc.hitCount[v] != 0 || mc.hitMean[v] != rzf::kInf) upstreamNever = false;
+    for (int k = 0; k < mc.weeks; ++k) {
+      if (mc.hitProb[static_cast<size_t>(v) * mc.weeks + k] != 0.0) upstreamNever = false;
+    }
+  }
+  for (int v = 3; v < 8; ++v) {
+    if (mc.hitCount[v] != mc.trials) downstreamAlways = false;
+  }
+  report("upstream of S is never reported as hit", upstreamNever,
+         "vertices 0..2 have hitCount 0, hitMean ∞, curves flat at 0");
+  report("downstream of S is always hit", downstreamAlways,
+         "vertices 3..7 hit in every trial");
+
+  // The exact side must agree about the same scenario.
+  report("hit(directed P_8, 0, {3}) = ∞", rzf::hitTime(g, 0, S) == rzf::kInf,
+         fmt("%.1f", rzf::hitTime(g, 0, S)));
+
+  std::vector<double> weak(8, 0.0);
+  rzf::weakestLinks(g, 0, weak.data(), 1ull << 20);
+  bool onlySelf = weak[0] == 0.0;
+  for (int u = 1; u < 8; ++u) {
+    if (weak[u] != rzf::kInf) onlySelf = false;
+  }
+  report("weakest links to vertex 0 on a directed path: only itself", onlySelf,
+         "every other single vertex reports ∞");
+
+  // An empty scenario is infinite too, and must not come back as 0.
+  const rzf::SimResult none = rzf::simulate(g, 0ull, sim);
+  report("empty S is infinite, not zero", none.infinite && none.meanEpt == rzf::kInf,
+         none.infinite ? "infinite" : fmt("%.4f", none.meanEpt));
+}
+
+// ── §4.5: the lower bound used for pruning ──────────────────────────────────
+//
+// throttle_fast.py prunes |S| levels with k + (n−k)/(k+1). It holds on paths and
+// cycles, which is all it was ever used for, but it is false in general — so the
+// engine's general search prunes with k + 1 instead. Both halves of that claim
+// are checked here so the deviation cannot rot.
+
+void checkThrottleBound() {
+  bool holds = true;
+  std::string worst;
+  for (int n = 4; n <= 16; ++n) {
+    for (const char* fam : {"path", "cycle"}) {
+      rzf::Graph g(0);
+      std::string error;
+      if (!rzf::families::parse(std::string(fam) + ":" + std::to_string(n), g, error)) continue;
+      const rzf::ThrottleResult r = throttleOf(g);
+      for (int k = 1; k <= n; ++k) {
+        if (rzf::throttleLowerBound(n, k) > r.value + 1e-9) {
+          // Only a violation if some optimal set actually has this size.
+          if (k == r.bestSize) {
+            holds = false;
+            worst = std::string(fam) + "_" + std::to_string(n) + " at k=" + std::to_string(k);
+          }
+        }
+      }
+    }
+  }
+  report("k + (n−k)/(k+1) holds at k = |S*| on paths/cycles", holds,
+         holds ? "no violation for n = 4..16" : "violated at " + worst);
+
+  rzf::Graph star = rzf::families::star(8);
+  const rzf::ThrottleResult r = throttleOf(star);
+  const double bound = rzf::throttleLowerBound(star.n(), r.bestSize);
+  report("…and is false on the star K_{1,8}", bound > r.value + 1e-9,
+         fmt("bound %.4f", bound) + fmt(" > th_rzf %.4f", r.value) +
+             " — why the general search uses k + 1");
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -361,6 +636,18 @@ int main(int argc, char** argv) {
   section("state visit order (§4.2)");
   std::printf("  OpenMP in this build: %s\n", rzf::openMpEnabled() ? "yes" : "no");
   checkVisitOrders();
+
+  section("§6.5 Monte Carlo vs exact on random weighted graphs");
+  checkMonteCarloVsExact();
+  checkMonteCarloHitTimes();
+  checkFastPath();
+
+  section("§6.6 infinite cases are never reported as finite");
+  checkInfiniteExhaustive();
+  checkInfiniteMonteCarlo();
+
+  section("§4.5 throttling lower bound");
+  checkThrottleBound();
 
   std::printf("\n%s %d checks, %d failed\n", gFailures ? "FAILED:" : "PASSED:", gChecks,
               gFailures);

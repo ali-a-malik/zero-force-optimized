@@ -209,14 +209,21 @@ struct SimResult {
   bool infinite = false;      // S cannot colour the graph (closure ≠ V)
   bool usedFastPath = false;
 
-  double meanEpt = kInf;      // mean rounds to colour everything
-  double seEpt = 0.0;         // standard error of that mean
+  // Mean rounds to colour every vertex, and the standard error of that mean.
+  // Capped trials are included at their capped value, so a nonzero `capped`
+  // makes meanEpt a lower bound — report it, never hide it. ∞ when `infinite`.
+  double meanEpt = kInf;
+  double seEpt = 0.0;
 
   int weeks = 0;
   std::vector<int> hitCount;      // n: trials in which v was ever hit
-  std::vector<double> hitMean;    // n: mean round v was hit (over trials hit)
+  // Mean round v was hit, over the trials where it was hit at all — so for a
+  // node with hitCount < trials this is conditional on being hit. ∞ if never.
+  std::vector<double> hitMean;
   std::vector<double> hitSe;      // n: standard error of hitMean
-  std::vector<double> hitProb;    // n × weeks: P(v hit by round k+1)
+  // n × weeks, row-major: hitProb[v*weeks + (k-1)] = P(v blue by end of round k).
+  // Vertices in S count as hit in round 0, so they are 1.0 throughout.
+  std::vector<double> hitProb;
 
   double se95(double se) const { return 1.959963984540054 * se; }
 };

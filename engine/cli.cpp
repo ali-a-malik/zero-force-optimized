@@ -6,6 +6,10 @@
 //   rzf_cli weakest  <family|-f file> <target>     hitting time from every {u}
 //   rzf_cli table    <family> <from> <to>          th over a range of n
 //   rzf_cli cost     <family|-f file>              exact-solve size estimate
+//   rzf_cli simulate <family|-f file> <set>        Monte Carlo, with curves
+//   rzf_cli trial    <family|-f file> <set>        one cascade, week by week
+//
+// Monte Carlo options: --trials N --seed S --weeks W
 //
 // A family is a spec like path:19, dpath:12, cycle:12, star:8, complete:10,
 // bipartite:4,5, spider:3,4, bintree:15 (leading 'd' = directed).
@@ -153,11 +157,18 @@ int usage() {
 int main(int argc, char** argv) {
   // --max-states is global; default 2^26 states = 512 MB of doubles.
   uint64_t maxStates = 1ull << 26;
+  rzf::SimOptions sim;
   std::vector<std::string> args;
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
     if (a == "--max-states" && i + 1 < argc) {
       maxStates = std::strtoull(argv[++i], nullptr, 10);
+    } else if (a == "--trials" && i + 1 < argc) {
+      sim.trials = std::atoi(argv[++i]);
+    } else if (a == "--seed" && i + 1 < argc) {
+      sim.seed = std::strtoull(argv[++i], nullptr, 10);
+    } else if (a == "--weeks" && i + 1 < argc) {
+      sim.weeks = std::atoi(argv[++i]);
     } else {
       args.push_back(a);
     }
@@ -286,6 +297,56 @@ int main(int argc, char** argv) {
       std::printf("target %d reachable: %s\n", target,
                   (reach >> target) & 1 ? "yes" : "no");
       printValue("hitting time", t.at(S));
+    }
+    return 0;
+  }
+
+  if (cmd == "simulate" || cmd == "trial") {
+    if (args.size() <= next) return usage();
+    uint64_t S = 0;
+    if (!parseSet(args[next], g.n(), S, error)) {
+      std::fprintf(stderr, "error: %s\n", error.c_str());
+      return 1;
+    }
+    std::printf("S      = %s\n", setToString(S, g.n()).c_str());
+
+    if (cmd == "trial") {
+      rzf::Rng rng(sim.seed);
+      std::vector<int> week(g.n(), -1);
+      const int rounds = rzf::simulateTrial(g, S, rng, 0, week.data());
+      std::printf("seed   = %llu\nrounds = %d\n", (unsigned long long)sim.seed, rounds);
+      for (int v = 0; v < g.n(); ++v) {
+        if (week[v] < 0) {
+          std::printf("  %4d: never\n", v);
+        } else {
+          std::printf("  %4d: week %d\n", v, week[v]);
+        }
+      }
+      return 0;
+    }
+
+    const rzf::SimResult r = rzf::simulate(g, S, sim);
+    std::printf("trials = %d · capped %d · round cap %d · kernel %s\n", r.trials, r.capped,
+                r.roundCap, r.usedFastPath ? "bit-sliced path" : "general");
+    if (r.infinite) {
+      std::printf("ept_rzf = infinite (the cascade cannot reach every vertex)\n");
+    } else {
+      std::printf("ept_rzf = %.6f ± %.6f (95%% CI) · se %.6f\n", r.meanEpt,
+                  r.se95(r.seEpt), r.seEpt);
+    }
+    std::printf("\n%6s %10s %10s %8s %s\n", "vertex", "mean week", "se", "P(hit)",
+                "P(hit by week 1,2,4,8,...)");
+    for (int v = 0; v < g.n(); ++v) {
+      if (r.hitCount[v] == 0) {
+        std::printf("%6d %10s %10s %8.3f  safe from this scenario\n", v, "never", "-", 0.0);
+        continue;
+      }
+      std::printf("%6d %10.4f %10.4f %8.3f ", v, r.hitMean[v], r.hitSe[v],
+                  double(r.hitCount[v]) / r.trials);
+      for (int k = 1; k <= r.weeks; k *= 2) {
+        std::printf(" %.3f", r.hitProb[size_t(v) * r.weeks + (k - 1)]);
+      }
+      std::printf("\n");
     }
     return 0;
   }
